@@ -1,0 +1,21 @@
+{
+  "name": "iptask",
+  "version": "1.0.0",
+  "description": "IPtasK — group study planner with peer-verified proof of work and auto confession posts",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "seed": "node server/seed.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.22.3",
+    "multer": "^2.5.0",
+    "socket.io": "^4.8.4"
+  }
+}

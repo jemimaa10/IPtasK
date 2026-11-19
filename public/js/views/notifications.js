@@ -4,7 +4,7 @@ import { $, $$, esc, avatar, timeAgo, toast } from '../ui.js';
 
 const ICON = {
   revision: '✎', checked: '✓', verified: '🎉', proof: '📎', confession: '🤖', mission: '📌',
-  deadline_h1: '⏰', daily: '📅', review_reminder: '👀', invite: '✉️', invite_response: '👥', removed: '🚪',
+  deadline_h1: '⏰', daily: '📅', review_reminder: '👀', invite: '✉️', invite_response: '👥', removed: '🚪', leader: '👑', label: '🏷️', redeem: '🗳️',
 };
 
 export function renderNotifications(view) {
@@ -61,7 +61,7 @@ export function renderNotifications(view) {
       const result = await Notification.requestPermission();
       if (result === 'granted') {
         push.remove();
-        toast('Desktop alerts enabled', { body: 'You will get alerts while IPtasK is open in a tab.' });
+        toast('Alerts enabled', { body: 'You will get alerts while IPtasK is open in a tab or as an installed app.' });
       }
     };
   }

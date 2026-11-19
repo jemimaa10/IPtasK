@@ -10,7 +10,7 @@ import { proofUpload, removeFile, PROOF_DIR } from '../uploads.js';
 import { loadGroup, membership } from './groups.js';
 import {
   FINAL_STATUSES, graceEnd, latestProof, requiredReviewerIds, reviewStates,
-  refreshMissionStatus, markDailyReminderSent,
+  refreshMissionStatus, markDailyReminderSent, parseReminderDays,
 } from '../missions.js';
 
 const router = Router();
@@ -42,6 +42,9 @@ function missionView(m, group) {
     graceEnd: graceEnd(m, group),
     status: m.status,
     seriesId: m.series_id,
+    // null = follows the group's default
+    reminderEveryDays: m.reminder_every_days,
+    effectiveReminderDays: m.reminder_every_days ?? group?.reminder_every_days ?? 1,
     createdAt: m.created_at,
     assignee: getUser(m.assignee_id),
     latestProofId: proof?.id ?? null,
@@ -65,9 +68,10 @@ function insertMissions(group, creator, items) {
   const ids = tx(() =>
     items.map((it) => {
       const info = run(
-        `INSERT INTO missions (group_id, assignee_id, created_by, title, description, deadline, series_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        group.id, it.assigneeId, creator.id, it.title, it.description, it.deadline, it.seriesId ?? null, createdAt
+        `INSERT INTO missions (group_id, assignee_id, created_by, title, description, deadline, series_id, reminder_every_days, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        group.id, it.assigneeId, creator.id, it.title, it.description, it.deadline, it.seriesId ?? null,
+        it.reminderEveryDays ?? null, createdAt
       );
       return Number(info.lastInsertRowid);
     })
@@ -100,7 +104,9 @@ function validateMissionInput(group, body) {
   if (!title || title.length > 120) return { error: 'Title must be 1–120 characters.' };
   if (!membership(group.id, assigneeId)) return { error: 'The assignee must be a member of this group.' };
   if (!deadline || deadline <= Date.now() + 60_000) return { error: `Deadline for "${title}" must be in the future.` };
-  return { title, description, assigneeId, deadline };
+  // "group" or missing = follow the group's default.
+  const reminderEveryDays = body.reminderEveryDays === 'group' ? null : parseReminderDays(body.reminderEveryDays, null);
+  return { title, description, assigneeId, deadline, reminderEveryDays };
 }
 
 // ---------- missions ----------
@@ -152,6 +158,7 @@ router.patch('/missions/:missionId', (req, res) => {
     description: req.body.description ?? mission.description,
     assigneeId: req.body.assigneeId ?? mission.assignee_id,
     deadline: req.body.deadline ?? mission.deadline,
+    reminderEveryDays: req.body.reminderEveryDays === undefined ? mission.reminder_every_days : req.body.reminderEveryDays,
   };
   const input = validateMissionInput(group, merged);
   if (input.error) return res.status(400).json(input);
@@ -160,11 +167,12 @@ router.patch('/missions/:missionId', (req, res) => {
   }
   const deadlineMoved = input.deadline !== mission.deadline;
   run(
-    `UPDATE missions SET title = ?, description = ?, assignee_id = ?, deadline = ?,
+    `UPDATE missions SET title = ?, description = ?, assignee_id = ?, deadline = ?, reminder_every_days = ?,
        h1_notified = CASE WHEN ? THEN 0 ELSE h1_notified END,
        reviewers_reminded = CASE WHEN ? THEN 0 ELSE reviewers_reminded END
      WHERE id = ?`,
-    input.title, input.description, input.assigneeId, input.deadline, deadlineMoved ? 1 : 0, deadlineMoved ? 1 : 0, mission.id
+    input.title, input.description, input.assigneeId, input.deadline, input.reminderEveryDays,
+    deadlineMoved ? 1 : 0, deadlineMoved ? 1 : 0, mission.id
   );
   if (input.assigneeId !== mission.assignee_id) {
     notify(input.assigneeId, {

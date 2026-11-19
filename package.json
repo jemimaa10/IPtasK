@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "seed": "node server/seed.js"
+    "seed": "node server/seed.js",
+    "test": "node --test",
+    "seed:beban": "node server/seed-beban.js"
   },
   "engines": {
     "node": ">=22.13"

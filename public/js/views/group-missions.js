@@ -1,6 +1,9 @@
 import { api, bus } from '../api.js';
 import { store } from '../state.js';
-import { $, $$, esc, avatar, countdown, fmtDate, toLocalInput, statusPill, openModal, confirmDialog, toast, busy } from '../ui.js';
+import {
+  $, $$, esc, avatar, countdown, fmtDate, toLocalInput, statusPill, openModal, confirmDialog, toast, busy,
+  reminderSelect, reminderLabel,
+} from '../ui.js';
 import { openUploadModal } from './group-feed.js';
 
 const ACTIVE = ['open', 'submitted', 'revision'];
@@ -41,6 +44,11 @@ function openMissionModal(ctx, mission, onDone) {
         <input class="input" type="number" name="occurrences" min="2" max="60" value="7">
         <small>Creates one mission per day/week, each with its own deadline, proof and checks.</small>
       </div>`}
+      <div class="field">
+        <label>Reminder until it's done</label>
+        ${reminderSelect('reminder', editing ? mission.reminderEveryDays : null, { groupDefault: ctx.group.reminderEveryDays })}
+        <small>How often the assignee is reminded while this jobdesk is unfinished. The H-1 warning is always sent.</small>
+      </div>
       <div class="form-error"></div>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">${editing ? 'Save changes' : 'Assign mission'}</button></div>
     </form>`);
@@ -55,6 +63,7 @@ function openMissionModal(ctx, mission, onDone) {
       title: form.title.value,
       description: form.description.value,
       deadline: new Date(form.deadline.value).getTime(),
+      reminderEveryDays: form.reminder.value === 'group' ? 'group' : Number(form.reminder.value),
     };
     if (!editing) {
       body.repeat = form.repeat.value;
@@ -135,12 +144,18 @@ function openAiSplit(ctx, onDone) {
             })
             .join('')}</tbody>
         </table>
+        <div class="field" style="margin-top:14px;max-width:340px">
+          <label>Reminder for these jobdesks</label>
+          ${reminderSelect('ai-reminder', null, { groupDefault: ctx.group.reminderEveryDays })}
+        </div>
         <div class="form-error" id="ai-save-error"></div>
         <div class="modal-actions"><button class="btn btn-primary" id="ai-save">Assign all missions</button></div>
       </div>`;
     $$('[data-rm]', box).forEach((b) => (b.onclick = () => b.closest('tr').remove()));
     $('#ai-save', box).onclick = (ev) => busy(ev.currentTarget, async () => {
+      const reminder = $('[name=ai-reminder]', box).value;
       const rows = $$('tbody tr', box).map((tr) => ({
+        reminderEveryDays: reminder === 'group' ? 'group' : Number(reminder),
         assigneeId: Number(tr.querySelector('[data-f=assigneeId]').value),
         title: tr.querySelector('[data-f=title]').value,
         description: tr.querySelector('[data-f=description]').value,
@@ -172,6 +187,7 @@ function missionItem(m, ctx) {
           ${statusPill(m.status)}
           <span title="${fmtDate(m.deadline)}">📅 ${fmtDate(m.deadline)}</span>
           ${['open', 'revision'].includes(m.status) ? `<span class="countdown ${cd.cls}">${cd.text}</span>` : ''}
+          ${['open', 'revision'].includes(m.status) ? `<span title="Reminder${m.reminderEveryDays === null ? ' (group default)' : ''}">${m.effectiveReminderDays ? '🔔' : '🔕'} ${reminderLabel(m.effectiveReminderDays).toLowerCase()}</span>` : ''}
           ${m.latestProofId && m.review.total ? `<span>✓ ${m.review.checked}/${m.review.total} checked</span>` : ''}
         </div>
       </div>
@@ -196,7 +212,7 @@ export function renderMissions(container, ctx) {
       <ul>
         <li>Upload proof before the deadline, or <b>IPtasK Bot</b> posts your confession to the feed.</li>
         <li>Every other member must press <b>Checked</b> within <b>${ctx.group.verifyGraceHours}h</b> after the deadline. Whoever doesn't gets exposed — and so does the work owner, because the work is unverified.</li>
-        <li>Reminders: daily for unfinished jobdesks, plus an H-1 warning.</li>
+        <li>Reminders for unfinished jobdesks: <b>${reminderLabel(ctx.group.reminderEveryDays).toLowerCase()}</b> by default (a mission can have its own), plus an H-1 warning.</li>
       </ul>
     </div>
     <div id="m-list"><div class="loading"><span class="spinner"></span></div></div>`;

@@ -3,6 +3,21 @@ import { store } from '../state.js';
 import { $, $$, esc, avatar, timeAgo, fmtDate, fmtSize, countdown, statusPill, openModal, toast, busy } from '../ui.js';
 import { confessionTweetHtml, downloadConfession } from './confession.js';
 
+/** The uploader can't review their own proof, so tell them who still has to. */
+function ownerWaitingHtml(p, end) {
+  if (p.author.id !== store.me.id || !p.isLatest || !['submitted', 'revision'].includes(p.mission.status)) return '';
+  const pending = p.reviewers.filter((r) => r.state === 'pending').map((r) => esc(r.user.displayName));
+  const revision = p.reviewers.filter((r) => r.state === 'revision');
+  const text = revision.length
+    ? 'Fix the revision above, then upload a new proof — the checks start over.'
+    : pending.length
+      ? `Waiting for <b>${pending.join(', ')}</b> to press Checked or Revision. You can't check your own work.`
+      : '';
+  return text
+    ? `<div class="owner-wait">${text} <span class="countdown ${end.cls}">Window closes in ${end.text.replace(' left', '')}</span></div>`
+    : '';
+}
+
 /** Upload modal: pick one of my open missions, attach files, add a caption. */
 export function openUploadModal(ctx, missions, preselectId, onDone) {
   const files = [];
@@ -105,7 +120,7 @@ function proofTweetHtml(p) {
       ${avatar(p.author, 44)}
       <div class="tweet-body">
         <div class="tweet-head">
-          <b>${esc(p.author.displayName)}</b><span class="handle">@${esc(p.author.username)}</span>
+          <a class="user-link" href="#/user/${p.author.id}"><b>${esc(p.author.displayName)}</b></a><span class="handle">@${esc(p.author.username)}</span>
           <span class="dot">·</span><time title="${fmtDate(p.createdAt)}">${timeAgo(p.createdAt)}</time>
         </div>
         <div class="tweet-mission">
@@ -154,7 +169,7 @@ function proofTweetHtml(p) {
              </div>`
           : p.myState === 'checked' && p.isLatest
             ? '<div class="tweet-actions"><span class="checked-tag">✓ You checked this</span></div>'
-            : ''}
+            : ownerWaitingHtml(p, end)}
       </div>
     </article>`;
 }

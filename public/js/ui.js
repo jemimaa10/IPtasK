@@ -162,6 +162,35 @@ export const ICONS = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  groups: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   menu: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
   logout: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
 };
+
+/** Reminder frequency for unfinished jobdesks, in days (0 = off). Must match REMINDER_CHOICES on the server. */
+export const REMINDER_OPTIONS = [
+  [1, 'Every day'],
+  [2, 'Every 2 days'],
+  [3, 'Every 3 days'],
+  [7, 'Every week'],
+  [0, 'No reminders'],
+];
+
+export function reminderLabel(days) {
+  return (REMINDER_OPTIONS.find(([d]) => d === days) || [, `Every ${days} days`])[1];
+}
+
+/**
+ * <select> for the reminder frequency. With `groupDefault` set, the first option is
+ * "Group default (…)" (value "group"), and `selected` null picks it.
+ */
+export function reminderSelect(name, selected, { groupDefault = null } = {}) {
+  const opts = REMINDER_OPTIONS.map(
+    ([d, label]) => `<option value="${d}" ${selected === d ? 'selected' : ''}>${label}</option>`
+  ).join('');
+  const group = groupDefault === null
+    ? ''
+    : `<option value="group" ${selected === null || selected === undefined ? 'selected' : ''}>Group default (${reminderLabel(groupDefault).toLowerCase()})</option>`;
+  return `<select class="input" name="${name}">${group}${opts}</select>`;
+}

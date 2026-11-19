@@ -1,6 +1,7 @@
-import { one, all, run } from './db.js';
+import { one, all, run, localDayNumber } from './db.js';
 import { notify, emitToGroup } from './realtime.js';
 import { roastLine } from './gemini.js';
+import { labelForMissedMission } from './labels.js';
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -103,11 +104,6 @@ export async function postConfession({ mission, userId, kind, targetUserId = nul
   });
 }
 
-function localDateKey(ts = Date.now()) {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
 function timeLeftText(ms) {
   if (ms >= DAY) {
     const days = Math.ceil(ms / DAY);
@@ -117,8 +113,19 @@ function timeLeftText(ms) {
   return `${hours} hour${hours > 1 ? 's' : ''}`;
 }
 
+/** Allowed reminder frequencies, in days. 0 = no reminders. */
+export const REMINDER_CHOICES = [0, 1, 2, 3, 7];
+
+/** Returns a valid frequency, or `fallback` when the value is missing or not one of the choices. */
+export function parseReminderDays(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  return REMINDER_CHOICES.includes(n) ? n : fallback;
+}
+
+/** Called right after a mission is created: the first reminder comes one full interval later. */
 export function markDailyReminderSent(missionId) {
-  run('UPDATE missions SET last_daily_reminder = ? WHERE id = ?', localDateKey(), missionId);
+  run('UPDATE missions SET last_reminder_day = ? WHERE id = ?', localDayNumber(), missionId);
 }
 
 let running = false;
@@ -137,6 +144,7 @@ export async function runScheduler() {
       }
       run("UPDATE missions SET status = 'failed' WHERE id = ?", m.id);
       emitToGroup(m.group_id, 'missions:changed');
+      labelForMissedMission(m);
       await postConfession({ mission: m, userId: m.assignee_id, kind: 'missed_deadline' });
     }
 
@@ -209,14 +217,19 @@ export async function runScheduler() {
       }
     }
 
-    // 5. Daily reminder for every unfinished jobdesk.
-    const today = localDateKey(now);
+    // Housekeeping: expired sessions.
+    run('DELETE FROM sessions WHERE expires_at <= ?', now);
+
+    // 5. Reminder for every unfinished jobdesk, at the mission's frequency (or the group's default).
+    const today = localDayNumber(now);
+    const EVERY = 'COALESCE(m.reminder_every_days, g.reminder_every_days)';
     for (const m of all(
-      `SELECT * FROM missions WHERE status IN ('open', 'revision') AND deadline > ?
-       AND (last_daily_reminder IS NULL OR last_daily_reminder != ?)`,
+      `SELECT m.* FROM missions m JOIN groups g ON g.id = m.group_id
+       WHERE m.status IN ('open', 'revision') AND m.deadline > ? AND ${EVERY} > 0
+         AND (m.last_reminder_day IS NULL OR ? - m.last_reminder_day >= ${EVERY})`,
       now, today
     )) {
-      run('UPDATE missions SET last_daily_reminder = ? WHERE id = ?', today, m.id);
+      run('UPDATE missions SET last_reminder_day = ? WHERE id = ?', today, m.id);
       notify(m.assignee_id, {
         type: 'daily',
         title: `You have unfinished jobdesk that will end in ${timeLeftText(m.deadline - now)}`,

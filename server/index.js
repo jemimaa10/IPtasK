@@ -2,7 +2,8 @@ import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import multer from 'multer';
-import { ROOT, PORT, SCHEDULER_INTERVAL_MS, GEMINI_MODELS } from './config.js';
+import { ROOT, PORT, SCHEDULER_INTERVAL_MS, GEMINI_MODELS, TRUST_PROXY } from './config.js';
+import { securityHeaders } from './security.js';
 import './db.js';
 import { AVATAR_DIR } from './uploads.js';
 import { initRealtime } from './realtime.js';
@@ -11,17 +12,25 @@ import { aiEnabled } from './gemini.js';
 import accountRoutes from './routes/account.js';
 import groupRoutes from './routes/groups.js';
 import missionRoutes from './routes/missions.js';
+import labelRoutes from './routes/labels.js';
 
 const app = express();
 app.disable('x-powered-by');
+if (TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
+app.use(securityHeaders);
 app.use(express.json({ limit: '1mb' }));
 
 const PUBLIC = path.join(ROOT, 'public');
 app.use('/uploads/avatars', express.static(AVATAR_DIR, { maxAge: '7d' }));
 app.get('/app', (_req, res) => res.sendFile(path.join(PUBLIC, 'app.html')));
+// The service worker must never be served stale, or app updates never reach installed clients.
+app.get('/sw.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(PUBLIC, 'sw.js'));
+});
 app.use(express.static(PUBLIC));
 
-app.use('/api', accountRoutes, groupRoutes, missionRoutes);
+app.use('/api', accountRoutes, groupRoutes, missionRoutes, labelRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 
 app.use((err, _req, res, _next) => {

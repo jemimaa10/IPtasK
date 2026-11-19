@@ -1,6 +1,6 @@
 import { api, bus } from '../api.js';
 import { store, app } from '../state.js';
-import { $, $$, esc, avatar, colorFor, countdown, fmtDate, statusPill, openModal, toast, busy } from '../ui.js';
+import { $, $$, esc, avatar, colorFor, countdown, fmtDate, statusPill, openModal, toast, busy, reminderSelect } from '../ui.js';
 import { openStory } from './confession.js';
 
 export function openCreateGroup() {
@@ -20,6 +20,11 @@ export function openCreateGroup() {
         </select>
         <small>How long teammates have to press Checked after a deadline before IPtasK Bot exposes them.</small>
       </div>
+      <div class="field">
+        <label>Reminders for unfinished jobdesks</label>
+        ${reminderSelect('reminder', 1)}
+        <small>How often each member is reminded about jobdesks they haven't finished. Each mission can override this. The H-1 warning is always sent.</small>
+      </div>
       <div class="form-error"></div>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">Create group</button></div>
     </form>`);
@@ -31,7 +36,12 @@ export function openCreateGroup() {
       try {
         const { group } = await api('/groups', {
           method: 'POST',
-          body: { name: form.name.value, description: form.description.value, verifyGraceHours: Number(form.grace.value) },
+          body: {
+            name: form.name.value,
+            description: form.description.value,
+            verifyGraceHours: Number(form.grace.value),
+            reminderEveryDays: Number(form.reminder.value),
+          },
         });
         close();
         await app.refreshGroups();

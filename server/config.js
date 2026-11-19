@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 try {
-  process.loadEnvFile(path.join(ROOT, '.env'));
+  // Tests run with their own env (in-memory DB, no Gemini key), never the developer's .env.
+  if (process.env.NODE_ENV !== 'test') process.loadEnvFile(path.join(ROOT, '.env'));
 } catch {
   // .env is optional; Gemini features fall back to built-in text without a key.
 }
@@ -17,5 +18,10 @@ export const GEMINI_MODELS = (process.env.GEMINI_MODEL || 'gemini-3.5-flash,gemi
   .map((m) => m.trim())
   .filter(Boolean);
 export const UPLOAD_DIR = path.join(ROOT, 'uploads');
+// ':memory:' is handy for tests.
+export const DB_PATH = process.env.IPTASK_DB_PATH || path.join(ROOT, 'data', 'iptask.db');
+export const IS_PROD = process.env.NODE_ENV === 'production';
+// Set when running behind a reverse proxy (nginx, Railway, Render…) so req.ip and HTTPS detection work.
+export const TRUST_PROXY = process.env.TRUST_PROXY || (IS_PROD ? '1' : '');
 export const SESSION_DAYS = 30;
 export const SCHEDULER_INTERVAL_MS = 60_000;

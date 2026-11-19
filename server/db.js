@@ -1,12 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT } from './config.js';
+import { DB_PATH } from './config.js';
 
-const dataDir = path.join(ROOT, 'data');
-fs.mkdirSync(dataDir, { recursive: true });
+if (DB_PATH !== ':memory:') fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
-export const db = new DatabaseSync(path.join(dataDir, 'iptask.db'));
+export const db = new DatabaseSync(DB_PATH);
 
 db.exec(`
 PRAGMA journal_mode = WAL;
@@ -141,6 +140,81 @@ CREATE INDEX IF NOT EXISTS idx_notif_user      ON notifications(user_id, id);
 CREATE INDEX IF NOT EXISTS idx_conf_group      ON confessions(group_id, id);
 `);
 
+/**
+ * Schema changes after the base schema above. Never edit an entry once it has shipped:
+ * append a new one. PRAGMA user_version records how many have run on this database.
+ */
+const MIGRATIONS = [
+  // 1: self-service recovery code (hashed) for "forgot password", plus a session expiry index.
+  () => db.exec(`
+    ALTER TABLE users ADD COLUMN recovery_hash TEXT;
+    CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+  `),
+  // 2: reminder frequency. Group default (0 = off, 1 = daily, 2 = every 2 days, …),
+  //    optional per-mission override (NULL = follow the group), and the local day number of the last reminder.
+  () => {
+    db.exec(`
+      ALTER TABLE groups ADD COLUMN reminder_every_days INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE missions ADD COLUMN reminder_every_days INTEGER;
+      ALTER TABLE missions ADD COLUMN last_reminder_day INTEGER;
+    `);
+    // Carry over "already reminded today" from the old date-string column.
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    db.prepare('UPDATE missions SET last_reminder_day = ? WHERE last_daily_reminder = ?').run(localDayNumber(), todayKey);
+  },
+  // 3: "Beban <group>" labels for missed jobdesks, removed by a unanimous redeem vote of the group.
+  () => db.exec(`
+    CREATE TABLE IF NOT EXISTS labels (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      group_id    INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      mission_id  INTEGER REFERENCES missions(id) ON DELETE SET NULL,
+      reason      TEXT NOT NULL,          -- title of the last missed jobdesk
+      fail_count  INTEGER NOT NULL DEFAULT 1,
+      created_at  INTEGER NOT NULL,
+      redeemed_at INTEGER                 -- NULL while the label is active
+    );
+    CREATE INDEX IF NOT EXISTS idx_labels_user  ON labels(user_id, redeemed_at);
+    CREATE INDEX IF NOT EXISTS idx_labels_group ON labels(group_id, redeemed_at);
+
+    -- status: open | approved | rejected
+    CREATE TABLE IF NOT EXISTS redeem_requests (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      label_id   INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+      message    TEXT NOT NULL DEFAULT '',
+      status     TEXT NOT NULL DEFAULT 'open',
+      created_at INTEGER NOT NULL,
+      closed_at  INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_redeem_label ON redeem_requests(label_id, status);
+
+    CREATE TABLE IF NOT EXISTS redeem_votes (
+      request_id INTEGER NOT NULL REFERENCES redeem_requests(id) ON DELETE CASCADE,
+      voter_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      approve    INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (request_id, voter_id)
+    );
+  `),
+];
+
+/** Days since 1970-01-01 in the server's local time zone, so "every 2 days" follows calendar days. */
+export function localDayNumber(ts = Date.now()) {
+  return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60_000) / 86_400_000);
+}
+
+function migrate() {
+  const current = db.prepare('PRAGMA user_version').get().user_version;
+  for (let v = current; v < MIGRATIONS.length; v++) {
+    tx(() => {
+      MIGRATIONS[v]();
+      db.exec(`PRAGMA user_version = ${v + 1}`);
+    });
+    console.log(`[db] migrated to schema v${v + 1}`);
+  }
+}
+
 export function tx(fn) {
   db.exec('BEGIN');
   try {
@@ -156,3 +230,5 @@ export function tx(fn) {
 export const one = (sql, ...params) => db.prepare(sql).get(...params);
 export const all = (sql, ...params) => db.prepare(sql).all(...params);
 export const run = (sql, ...params) => db.prepare(sql).run(...params);
+
+migrate();

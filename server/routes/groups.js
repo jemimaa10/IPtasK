@@ -3,7 +3,9 @@ import { one, all, run, tx } from '../db.js';
 import { requireAuth, publicUser, getUser } from '../auth.js';
 import { notify, emitToGroup, emitToUser } from '../realtime.js';
 import { aiEnabled, splitJobdesk } from '../gemini.js';
-import { refreshMissionStatus, FINAL_STATUSES } from '../missions.js';
+import { refreshMissionStatus, FINAL_STATUSES, parseReminderDays } from '../missions.js';
+import { groupLeaderboard } from '../stats.js';
+import { reevaluateGroupRedeems } from '../labels.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -39,6 +41,7 @@ function groupView(group, userId) {
     name: group.name,
     description: group.description,
     verifyGraceHours: group.verify_grace_hours,
+    reminderEveryDays: group.reminder_every_days,
     leaderId: group.leader_id,
     isLeader: group.leader_id === userId,
     createdAt: group.created_at,
@@ -71,8 +74,9 @@ router.post('/groups', (req, res) => {
   const grace = Math.min(168, Math.max(1, Number(req.body.verifyGraceHours) || 24));
   const id = tx(() => {
     const info = run(
-      'INSERT INTO groups (name, description, leader_id, verify_grace_hours, created_at) VALUES (?, ?, ?, ?, ?)',
-      name, String(req.body.description || '').trim().slice(0, 300), req.user.id, grace, Date.now()
+      'INSERT INTO groups (name, description, leader_id, verify_grace_hours, reminder_every_days, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      name, String(req.body.description || '').trim().slice(0, 300), req.user.id, grace,
+      parseReminderDays(req.body.reminderEveryDays, 1), Date.now()
     );
     const groupId = Number(info.lastInsertRowid);
     run("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'leader', ?)", groupId, req.user.id, Date.now());
@@ -103,8 +107,9 @@ router.patch('/groups/:groupId', loadGroup(true), (req, res) => {
   if (!name || name.length > 60) return res.status(400).json({ error: 'Group name must be 1–60 characters.' });
   const grace = Math.min(168, Math.max(1, Number(req.body.verifyGraceHours ?? req.group.verify_grace_hours) || 24));
   run(
-    'UPDATE groups SET name = ?, description = ?, verify_grace_hours = ? WHERE id = ?',
-    name, String(req.body.description ?? req.group.description).trim().slice(0, 300), grace, req.group.id
+    'UPDATE groups SET name = ?, description = ?, verify_grace_hours = ?, reminder_every_days = ? WHERE id = ?',
+    name, String(req.body.description ?? req.group.description).trim().slice(0, 300), grace,
+    parseReminderDays(req.body.reminderEveryDays, req.group.reminder_every_days), req.group.id
   );
   emitToGroup(req.group.id, 'group:changed');
   res.json({ group: groupView(one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
@@ -202,7 +207,7 @@ router.delete('/groups/:groupId/members/:userId', loadGroup(), (req, res) => {
     return res.status(403).json({ error: 'Only the group leader can remove members.' });
   }
   if (targetId === req.group.leader_id) {
-    return res.status(400).json({ error: 'The leader cannot leave. Delete the group instead.' });
+    return res.status(400).json({ error: 'The leader cannot leave. Make someone else leader first, or delete the group.' });
   }
   tx(() => {
     run('DELETE FROM group_members WHERE group_id = ? AND user_id = ?', req.group.id, targetId);
@@ -212,10 +217,11 @@ router.delete('/groups/:groupId/members/:userId', loadGroup(), (req, res) => {
       req.group.id, targetId, ...FINAL_STATUSES
     );
   });
-  // Their missing check no longer blocks anyone's verification.
+  // Their missing check no longer blocks anyone's verification, and their missing vote no longer blocks a redeem.
   for (const m of all("SELECT id FROM missions WHERE group_id = ? AND status IN ('submitted','revision')", req.group.id)) {
     refreshMissionStatus(m.id);
   }
+  reevaluateGroupRedeems(req.group.id);
   if (!isSelf) {
     notify(targetId, { type: 'removed', title: `You were removed from "${req.group.name}"`, link: '#/home' });
   }
@@ -223,6 +229,63 @@ router.delete('/groups/:groupId/members/:userId', loadGroup(), (req, res) => {
   emitToGroup(req.group.id, 'missions:changed');
   emitToUser(targetId, 'group:deleted', { groupId: req.group.id });
   res.json({ ok: true });
+});
+
+router.post('/groups/:groupId/transfer', loadGroup(true), (req, res) => {
+  const targetId = Number(req.body.userId);
+  if (targetId === req.user.id) return res.status(400).json({ error: 'You are already the leader.' });
+  if (!membership(req.group.id, targetId)) return res.status(400).json({ error: 'The new leader must be a member of this group.' });
+  tx(() => {
+    run('UPDATE groups SET leader_id = ? WHERE id = ?', targetId, req.group.id);
+    run("UPDATE group_members SET role = 'member' WHERE group_id = ? AND user_id = ?", req.group.id, req.user.id);
+    run("UPDATE group_members SET role = 'leader' WHERE group_id = ? AND user_id = ?", req.group.id, targetId);
+  });
+  notify(targetId, {
+    type: 'leader',
+    title: `You are now the leader of "${req.group.name}"`,
+    body: `${req.user.display_name} handed the group over to you.`,
+    link: `#/group/${req.group.id}/members`,
+    actorId: req.user.id,
+  });
+  emitToGroup(req.group.id, 'group:changed');
+  res.json({ ok: true });
+});
+
+router.get('/groups/:groupId/leaderboard', loadGroup(), (req, res) => {
+  res.json({
+    rows: groupLeaderboard(req.group.id).map(({ user, ...stats }) => ({ user: publicUser(user), ...stats })),
+  });
+});
+
+function csvCell(value) {
+  let text = value == null ? '' : String(value);
+  // Stop spreadsheet apps from running cell text as a formula.
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+router.get('/groups/:groupId/export.csv', loadGroup(true), (req, res) => {
+  const rows = all(
+    `SELECT m.*, u.username, u.display_name,
+       (SELECT COUNT(*) FROM proofs p WHERE p.mission_id = m.id) AS proof_count,
+       (SELECT MAX(created_at) FROM proofs p WHERE p.mission_id = m.id) AS last_proof_at
+     FROM missions m JOIN users u ON u.id = m.assignee_id
+     WHERE m.group_id = ? ORDER BY m.deadline`,
+    req.group.id
+  );
+  const iso = (ts) => (ts ? new Date(ts).toISOString() : '');
+  const lines = [
+    ['Mission', 'Description', 'Assignee', 'Username', 'Status', 'Deadline (UTC)', 'Created (UTC)', 'Proof uploads', 'Last proof (UTC)'],
+    ...rows.map((m) => [
+      m.title, m.description, m.display_name, m.username, m.status,
+      iso(m.deadline), iso(m.created_at), m.proof_count, iso(m.last_proof_at),
+    ]),
+  ];
+  const safeName = req.group.name.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'group';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="iptask-${safeName}-missions.csv"`);
+  // BOM so Excel reads UTF-8 names correctly.
+  res.send('\uFEFF' + lines.map((l) => l.map(csvCell).join(',')).join('\r\n'));
 });
 
 // ---------- free chat ----------

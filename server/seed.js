@@ -1,6 +1,6 @@
 // Demo data: `npm run seed`. Safe to run more than once — skips if the demo users exist.
 import bcrypt from 'bcryptjs';
-import { one, run, tx } from './db.js';
+import { one, run, tx, localDayNumber } from './db.js';
 
 const PASSWORD = 'demo123';
 const HOUR = 3600_000;
@@ -28,9 +28,9 @@ tx(() => {
     run('INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)', groupId, id, role, now);
   }
 
-  const today = new Date().toDateString();
+  const today = localDayNumber(); // first reminder tomorrow
   const mission = (assignee, title, description, hoursLeft) =>
-    run(`INSERT INTO missions (group_id, assignee_id, created_by, title, description, deadline, last_daily_reminder, created_at)
+    run(`INSERT INTO missions (group_id, assignee_id, created_by, title, description, deadline, last_reminder_day, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       groupId, assignee, ketua, title, description, now + hoursLeft * HOUR, today, now);
   mission(ketua, 'Write the final report (Bab 1–2)', 'Introduction and literature review, min. 6 pages.', 72);

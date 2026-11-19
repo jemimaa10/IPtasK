@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { one, run } from './db.js';
-import { SESSION_DAYS } from './config.js';
+import { SESSION_DAYS, IS_PROD } from './config.js';
 
 export const COOKIE = 'iptask_session';
 
@@ -18,13 +18,22 @@ export function createSession(res, userId) {
   const token = crypto.randomBytes(32).toString('hex');
   const maxAge = SESSION_DAYS * 24 * 3600 * 1000;
   run('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)', token, userId, Date.now() + maxAge);
-  res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge });
+  res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge });
 }
 
 export function destroySession(req, res) {
   const token = parseCookies(req.headers.cookie)[COOKIE];
   if (token) run('DELETE FROM sessions WHERE token = ?', token);
-  res.clearCookie(COOKIE);
+  res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: IS_PROD });
+}
+
+/** Log a user out everywhere (after a password change or reset), optionally keeping one session. */
+export function destroyAllSessions(userId, exceptToken = null) {
+  run('DELETE FROM sessions WHERE user_id = ? AND token IS NOT ?', userId, exceptToken);
+}
+
+export function sessionToken(req) {
+  return parseCookies(req.headers.cookie)[COOKIE] || null;
 }
 
 export function userFromCookieHeader(header) {

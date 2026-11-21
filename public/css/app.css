@@ -375,6 +375,18 @@ textarea.input { min-height: 90px; resize: vertical; }
   .chat { height: 100%; }
   .chat-scroll { padding: 16px; }
   .composer { padding: 12px 16px 16px; }
+}
+/* Tablets in portrait keep the bottom nav, but have room for desktop-style rows and wider padding. */
+@media (min-width: 601px) and (max-width: 860px) {
+  .page, .group-body { padding: 28px 28px 88px; }
+  .group-header-inner { padding: 18px 28px 0; }
+  .chat-scroll { padding: 20px 28px; }
+  .composer { padding: 12px 28px 16px; }
+  /* Keep the five tabs close together instead of spread across the whole width. */
+  nav.bottom-nav { padding-inline: max(6px, calc((100% - 560px) / 2)); }
+}
+/* Phones only: stack rows and compact cards. */
+@media (max-width: 600px) {
   .msg { max-width: 90%; }
   .mission { flex-direction: column; }
   .mission-actions { justify-content: flex-start; }

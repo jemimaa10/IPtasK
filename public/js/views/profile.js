@@ -13,7 +13,7 @@ export function statsHtml(st, { own = true } = {}) {
     `<span class="stat-fact ${value ? tone : ''}" title="${hint}"><b>${value}</b> ${label}</span>`;
   return `
     <div class="stat-grid">
-      ${tile(`🔥 ${st.streak.current}`, `day streak · best ${st.streak.best}`, `Days in a row ${who} uploaded at least one proof. Today doesn't break it until it's over.`, 'lime')}
+      ${tile(`🔥 ${st.streak.current}`, `day streak · best ${st.streak.best}`, `Days in a row ${who} uploaded at least one proof. Today doesn't break it until it's over.`, 'accent')}
       ${tile(st.completionRate == null ? '—' : `${st.completionRate}%`, 'on time', 'Share of finished jobdesks that got verified before the deadline.')}
       ${tile(st.verified, 'jobdesks done', `${own ? 'Your' : 'Their'} jobdesks that every teammate checked.`, 'green')}
     </div>

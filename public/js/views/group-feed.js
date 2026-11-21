@@ -1,6 +1,6 @@
 import { api, bus } from '../api.js';
 import { store } from '../state.js';
-import { $, $$, esc, avatar, timeAgo, fmtDate, fmtSize, countdown, statusPill, openModal, toast, busy } from '../ui.js';
+import { $, $$, esc, avatar, timeAgo, fmtDate, fmtSize, countdown, statusPill, openModal, confirmDialog, toast, busy } from '../ui.js';
 import { confessionTweetHtml, downloadConfession } from './confession.js';
 
 /** The uploader can't review their own proof, so tell them who still has to. */
@@ -35,7 +35,7 @@ export function openUploadModal(ctx, missions, preselectId, onDone) {
         <label>Caption <small>(optional)</small></label>
         <textarea class="input" name="caption" maxlength="1000" placeholder="What did you finish? Anything reviewers should know?"></textarea>
       </div>
-      <div class="dropzone" id="up-drop">📎 Drop files here or <b style="color:var(--lime)">browse</b><br><small>Images, PDF, docs, zip… up to 6 files, 15 MB each</small></div>
+      <div class="dropzone" id="up-drop">📎 Drop files here or <b style="color:var(--accent)">browse</b><br><small>Images, PDF, docs, zip… up to 6 files, 15 MB each</small></div>
       <input type="file" id="up-input" multiple hidden>
       <div class="picked" id="up-picked"></div>
       <div class="form-error"></div>
@@ -160,7 +160,7 @@ function proofTweetHtml(p) {
         ${p.canReview
           ? `<div class="tweet-actions">
                <button class="btn btn-sm btn-revision" data-revision="${p.id}">✎ Revision</button>
-               <button class="btn btn-sm btn-checked" data-check="${p.id}">✓ Checked</button>
+               <button class="btn btn-sm btn-checked" data-check="${p.id}" data-who="${esc(p.author.displayName)}" data-title="${esc(p.mission.title)}">✓ Checked</button>
                <span style="margin-left:auto;font-size:12px;align-self:center" class="countdown ${end.cls}">review within ${end.text.replace(' left', '')}</span>
              </div>
              <div class="revision-box" data-box="${p.id}" hidden>
@@ -227,6 +227,12 @@ export function renderFeed(container, ctx) {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.check) {
+      const ok = await confirmDialog(
+        'Mark this proof as checked?',
+        `You confirm that ${t.dataset.who}'s proof for "${t.dataset.title}" really finishes the jobdesk. This can't be undone. If something is missing, use Revision instead.`,
+        { confirmText: '✓ Yes, checked' }
+      );
+      if (!ok) return;
       busy(t, async () => {
         try {
           await api(`/proofs/${t.dataset.check}/review`, { method: 'POST', body: { type: 'checked' } });

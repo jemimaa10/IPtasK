@@ -1,7 +1,7 @@
 // IPtasK service worker: makes the app installable, keeps the shell available offline,
 // and opens the right screen when a notification is clicked.
-const CACHE = 'iptask-v1';
-const SHELL = ['/app', '/css/base.css', '/css/app.css', '/favicon.svg', '/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'iptask-v2';
+const SHELL = ['/app', '/css/base.css', '/css/app.css', '/favicon.svg', '/icon.svg', '/manifest.webmanifest', '/brand/mascot.svg', '/brand/mascot-dark.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -1,6 +1,6 @@
 import { api, bus, connectSocket, disconnectSocket } from './api.js';
 import { store, app } from './state.js';
-import { $, $$, esc, avatar, colorFor, toast, openModal, ICONS } from './ui.js';
+import { $, $$, esc, avatar, colorFor, toast, openModal, confirmDialog, ICONS } from './ui.js';
 import { renderAuth } from './views/auth.js';
 import { renderHome } from './views/home.js';
 import { renderGroup } from './views/group.js';
@@ -16,7 +16,7 @@ function shellHtml() {
   return `
   <div class="shell" id="shell">
     <aside class="sidebar">
-      <a class="brand" href="#/home"><span class="brand-mark">iK</span><span class="brand-name">IPtas<b>K</b></span></a>
+      <a class="brand" href="#/home"><span class="brand-mark"><img class="logo-on-dark" src="/brand/mascot-dark.svg" alt=""><img class="logo-on-light" src="/brand/mascot.svg" alt=""></span><span class="brand-name">IPtas<b>K</b></span></a>
       <nav class="nav">
         <a href="#/home" data-route="home">${ICONS.home}Home</a>
         <a href="#/notifications" data-route="notifications">${ICONS.bell}Notifications<span class="badge" id="nav-unread" hidden></span></a>
@@ -28,7 +28,7 @@ function shellHtml() {
     </aside>
     <div>
       <div class="topbar">
-        <a class="brand" href="#/home"><span class="brand-mark">iK</span><span class="brand-name">IPtas<b>K</b></span></a>
+        <a class="brand" href="#/home"><span class="brand-mark"><img class="logo-on-dark" src="/brand/mascot-dark.svg" alt=""><img class="logo-on-light" src="/brand/mascot.svg" alt=""></span><span class="brand-name">IPtas<b>K</b></span></a>
       </div>
       <main id="view"></main>
     </div>
@@ -91,9 +91,11 @@ function openGroupSheet() {
 }
 
 app.logout = async () => {
+  if (!(await confirmDialog('Log out?', `You'll need your username and password${store.me ? ` for @${store.me.username}` : ''} to log back in.`, { confirmText: 'Log out', danger: true }))) return;
   await api('/auth/logout', { method: 'POST' });
   disconnectSocket();
   store.me = null;
+  announceAccount();
   location.hash = '#/login';
   start();
 };
@@ -150,6 +152,7 @@ function route() {
   const view = $('#view');
   view.innerHTML = '';
   window.scrollTo(0, 0);
+  document.querySelector('.shell > div')?.scrollTo(0, 0); // light mode scrolls inside the panel
   const renderers = { home: renderHome, notifications: renderNotifications, profile: renderProfile, group: renderGroup, user: renderUser };
   cleanup = renderers[r.name](view, r) || null;
 }
@@ -163,6 +166,7 @@ async function start() {
   } catch {
     store.me = null;
   }
+  announceAccount();
   if (!store.me) {
     const r = parseRoute();
     renderAuth(root, ['register', 'recover'].includes(r.name) ? r.name : 'login');
@@ -177,6 +181,32 @@ async function start() {
   route();
 }
 app.start = start;
+
+// Tabs of one browser share the login cookie. When another tab logs in as someone else (or logs out),
+// this tab would keep showing the old name while the server answers as the new account, which hides
+// buttons like Checked/Revision. So every tab follows the account change.
+const ACCOUNT_KEY = 'iptask-account';
+function announceAccount() {
+  try { localStorage.setItem(ACCOUNT_KEY, String(store.me?.id ?? '')); } catch { /* storage blocked */ }
+}
+function followAccount(id) {
+  if (id === String(store.me?.id ?? '')) return;
+  disconnectSocket(); // the socket still belongs to the old account
+  start().then(() => toast(id ? 'You logged in with another account in a different tab, so this tab switched too.' : 'You logged out in another tab.'));
+}
+window.addEventListener('storage', (e) => {
+  if (e.key === ACCOUNT_KEY) followAccount(e.newValue || '');
+});
+// Fallback for browsers that block storage events: re-check when the tab comes back into view.
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !store.me) return;
+  try {
+    const me = (await api('/auth/me')).user;
+    followAccount(String(me?.id ?? ''));
+  } catch {
+    followAccount('');
+  }
+});
 
 window.addEventListener('hashchange', () => {
   if (!store.me) {
@@ -198,7 +228,7 @@ bus.on('notification', (n) => {
 /** Through the service worker when possible: `new Notification()` is not allowed on Android. */
 async function showNative(n, go) {
   const title = `IPtasK — ${n.title}`;
-  const options = { body: n.body, icon: '/icon.svg', tag: `n${n.id}`, data: { link: n.link } };
+  const options = { body: n.body, icon: '/brand/app-icon-light-192.png', tag: `n${n.id}`, data: { link: n.link } };
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) return await reg.showNotification(title, options);

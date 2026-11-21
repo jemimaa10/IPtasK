@@ -18,7 +18,7 @@ export function el(html) {
 
 // ---------- avatars ----------
 
-const PALETTE = ['#c6f432', '#8b6cff', '#ff8fa3', '#4ea8ff', '#ffb547', '#3ddc97', '#ff6bd6', '#5eead4'];
+const PALETTE = ['#a8d8bc', '#8b6cff', '#ff8fa3', '#4ea8ff', '#ffb547', '#3ddc97', '#ff6bd6', '#5eead4'];
 export function colorFor(seed = '') {
   let h = 0;
   for (const ch of String(seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;

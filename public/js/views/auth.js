@@ -8,7 +8,7 @@ export function renderAuth(root, mode) {
   root.innerHTML = `
   <div class="auth-wrap">
     <div class="auth-card">
-      <a class="brand" href="/"><span class="brand-mark">iK</span><span class="brand-name">IPtas<b>K</b></span></a>
+      <a class="brand" href="/"><span class="brand-mark"><img class="logo-on-dark" src="/brand/mascot-dark.svg" alt=""><img class="logo-on-light" src="/brand/mascot.svg" alt=""></span><span class="brand-name">IPtas<b>K</b></span></a>
       <h1>${isLogin ? 'Welcome back' : 'Create your account'}</h1>
       <p>${isLogin ? 'Your group is waiting for your proof.' : 'Just a username and a password. You can set your display name and photo later.'}</p>
       <div id="google-box"></div>
@@ -71,7 +71,7 @@ function renderRecover(root) {
   root.innerHTML = `
   <div class="auth-wrap">
     <div class="auth-card">
-      <a class="brand" href="/"><span class="brand-mark">iK</span><span class="brand-name">IPtas<b>K</b></span></a>
+      <a class="brand" href="/"><span class="brand-mark"><img class="logo-on-dark" src="/brand/mascot-dark.svg" alt=""><img class="logo-on-light" src="/brand/mascot.svg" alt=""></span><span class="brand-name">IPtas<b>K</b></span></a>
       <h1>Reset your password</h1>
       <p>Use the recovery code you saved from your Profile page. Each code works once.</p>
       <form id="rec-form" class="card" novalidate>

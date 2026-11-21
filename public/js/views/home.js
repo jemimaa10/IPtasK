@@ -83,7 +83,14 @@ export function renderHome(view) {
           <h1>Hi, ${esc(store.me.displayName)} 👋</h1>
           <p>Here's what your circles are counting on you for.</p>
         </div>
-        <button class="btn btn-primary" id="home-new-group">+ New group</button>
+        <div class="home-actions">
+          <button type="button" class="theme-switch" id="theme-switch" role="switch" aria-label="Dark mode" title="Light / dark"
+            aria-checked="${window.iptaskTheme?.get() !== 'light'}">
+            <svg class="ts-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="ts-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          </button>
+          <button class="btn btn-primary" id="home-new-group">+ New group</button>
+        </div>
       </div>
       <div id="home-stories"></div>
       <div id="home-invites"></div>
@@ -101,6 +108,11 @@ export function renderHome(view) {
       </div>
     </div>`;
   $('#home-new-group').onclick = openCreateGroup;
+  $('#theme-switch').onclick = (e) => {
+    const dark = window.iptaskTheme?.get() === 'light';
+    window.iptaskTheme?.set(dark ? 'dark' : 'light');
+    e.currentTarget.setAttribute('aria-checked', String(dark));
+  };
 
   let stories = [];
 
@@ -185,7 +197,7 @@ export function renderHome(view) {
               </div>
             </a>`)
           .join('')}</div>`
-      : `<div class="empty"><b>You're not in any group yet</b>Create one as a leader, or ask your leader to invite <b style="display:inline;color:var(--lime)">@${esc(store.me.username)}</b>.</div>`;
+      : `<div class="empty"><b>You're not in any group yet</b>Create one as a leader, or ask your leader to invite <b style="display:inline;color:var(--accent)">@${esc(store.me.username)}</b>.</div>`;
   }
 
   renderGroups();

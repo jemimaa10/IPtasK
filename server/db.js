@@ -197,6 +197,12 @@ const MIGRATIONS = [
       PRIMARY KEY (request_id, voter_id)
     );
   `),
+  // 4: "Continue with Google". Google-only accounts have password_hash = '' until they set one.
+  () => db.exec(`
+    ALTER TABLE users ADD COLUMN google_sub TEXT;
+    ALTER TABLE users ADD COLUMN email TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google ON users(google_sub);
+  `),
 ];
 
 /** Days since 1970-01-01 in the server's local time zone, so "every 2 days" follows calendar days. */

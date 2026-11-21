@@ -46,6 +46,12 @@ The scheduler runs every minute inside the server process (`server/missions.js`)
 - Failed logins are limited to 5 per username+IP and 30 per IP every 15 minutes; sign-ups to 10 per IP per hour (in memory, per server process).
 - Security headers (CSP, frame blocking, nosniff) on every response; session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` when `NODE_ENV=production`.
 - Proof files are only served to members of the group.
+- **Continue with Google** (optional): the button appears on the login/sign-up page once `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set.
+  1. Google Cloud Console → APIs & Services → Credentials → *Create OAuth client ID* → **Web application**.
+  2. Authorized redirect URI: `http://localhost:3000/api/auth/google/callback` (and `https://<your domain>/api/auth/google/callback` when deployed; set `PUBLIC_URL` to that domain).
+  3. Put the ID and secret in `.env` and restart.
+
+  A first Google sign-in creates an account (username from the email, editable display name). Existing users can connect Google from Profile. Google-only accounts can set a password later; Google can be disconnected only once a password exists.
 
 ## Group features
 

@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { app } from '../state.js';
-import { $, busy } from '../ui.js';
+import { $, busy, takeAuthError, googleButton } from '../ui.js';
 
 export function renderAuth(root, mode) {
   if (mode === 'recover') return renderRecover(root);
@@ -11,6 +11,7 @@ export function renderAuth(root, mode) {
       <a class="brand" href="/"><span class="brand-mark">iK</span><span class="brand-name">IPtas<b>K</b></span></a>
       <h1>${isLogin ? 'Welcome back' : 'Create your account'}</h1>
       <p>${isLogin ? 'Your group is waiting for your proof.' : 'Just a username and a password. You can set your display name and photo later.'}</p>
+      <div id="google-box"></div>
       <form id="auth-form" class="card" novalidate>
         <div class="field">
           <label for="username">Username</label>
@@ -33,6 +34,15 @@ export function renderAuth(root, mode) {
       <p class="auth-switch">${isLogin ? "Don't have an account? <a href=\"#/register\">Sign up</a>" : 'Already have an account? <a href="#/login">Log in</a>'}</p>
     </div>
   </div>`;
+
+  const redirectError = takeAuthError();
+  if (redirectError) $('#auth-error').textContent = redirectError;
+  api('/auth/providers').then(({ google }) => {
+    const box = $('#google-box');
+    if (!google || !box) return;
+    box.innerHTML = `${googleButton(isLogin ? 'Continue with Google' : 'Sign up with Google')}
+      <div class="auth-or"><span>or with a username</span></div>`;
+  }).catch(() => {});
 
   const form = $('#auth-form');
   form.addEventListener('submit', async (e) => {

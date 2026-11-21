@@ -23,5 +23,10 @@ export const DB_PATH = process.env.IPTASK_DB_PATH || path.join(ROOT, 'data', 'ip
 export const IS_PROD = process.env.NODE_ENV === 'production';
 // Set when running behind a reverse proxy (nginx, Railway, Render…) so req.ip and HTTPS detection work.
 export const TRUST_PROXY = process.env.TRUST_PROXY || (IS_PROD ? '1' : '');
+// "Continue with Google" shows up only when both are set (Google Cloud Console → Credentials → OAuth client ID, Web application).
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+// Public address of the app, e.g. https://iptask.example.com. Used for the Google redirect URI; defaults to the request's host.
+export const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 export const SESSION_DAYS = 30;
 export const SCHEDULER_INTERVAL_MS = 60_000;

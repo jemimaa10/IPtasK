@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { store, app } from '../state.js';
-import { $, esc, avatar, toast, busy, openModal } from '../ui.js';
+import { $, esc, avatar, toast, busy, openModal, confirmDialog, takeAuthError, googleButton } from '../ui.js';
+import { cropAvatar } from '../cropper.js';
 import { labelCard, bindLabelActions } from './labels.js';
 
 export function statsHtml(st, { own = true } = {}) {
@@ -36,10 +37,18 @@ export function renderProfile(view) {
 
   let stats = null;
   let hasRecoveryCode = null;
-  Promise.all([api('/me/stats'), api('/auth/me')])
-    .then(([st, me]) => {
+  let hasPassword = true;
+  let google = null;
+  let googleEnabled = false;
+  const redirectError = takeAuthError();
+  if (redirectError) toast(redirectError, { error: true });
+  Promise.all([api('/me/stats'), api('/auth/me'), api('/auth/providers').catch(() => ({}))])
+    .then(([st, me, providers]) => {
       stats = st;
       hasRecoveryCode = me.hasRecoveryCode;
+      hasPassword = me.hasPassword;
+      google = me.google;
+      googleEnabled = Boolean(providers.google);
       if (view.isConnected) draw();
     })
     .catch((err) => toast(err.message, { error: true }));
@@ -73,17 +82,30 @@ export function renderProfile(view) {
           </form>
         </div>
         </div>
+        ${google || googleEnabled ? `
         <div class="section">
-          <h2 class="section-title">Change password</h2>
+          <h2 class="section-title">Google account ${google ? '<span class="pill verified">Connected</span>' : ''}</h2>
+          <div class="card google-card">
+            ${google
+              ? `<p>You can log in with Google${google.email ? ` (<b>${esc(google.email)}</b>)` : ''}.</p>
+                 ${hasPassword ? '<button class="btn btn-ghost" id="g-unlink">Disconnect Google</button>' : '<small class="stat-note">Set a password below before you can disconnect Google.</small>'}`
+              : `<p>Connect Google to log in with one tap, without typing your password.</p>
+                 ${googleButton('Connect Google', '/api/auth/google?mode=link')}`}
+          </div>
+        </div>` : ''}
+        <div class="section">
+          <h2 class="section-title">${hasPassword ? 'Change password' : 'Set a password'}</h2>
           <form class="card" id="pw-form">
-            <div class="field"><label>Current password</label><input class="input" type="password" name="current" autocomplete="current-password" required></div>
+            ${hasPassword
+              ? '<div class="field"><label>Current password</label><input class="input" type="password" name="current" autocomplete="current-password" required></div>'
+              : `<p style="margin:0 0 12px;color:var(--text-2)">You log in with Google. Add a password to also log in with <b>@${esc(store.me.username)}</b>.</p>`}
             <div class="field"><label>New password</label><input class="input" type="password" name="next" autocomplete="new-password" minlength="6" required></div>
             <div class="form-error"></div>
-            <button class="btn">Update password</button>
+            <button class="btn">${hasPassword ? 'Update password' : 'Set password'}</button>
             <small class="stat-note">Changing it logs you out on your other devices.</small>
           </form>
         </div>
-        <div class="section">
+        ${hasPassword ? `<div class="section">
           <h2 class="section-title">Recovery code ${hasRecoveryCode === false ? '<span class="pill failed">Not set</span>' : hasRecoveryCode ? '<span class="pill verified">Saved</span>' : ''}</h2>
           <form class="card" id="rc-form">
             <p style="margin:0 0 12px;color:var(--text-2)">IPtasK has no email, so this code is the only way back in if you forget your password. Making a new one replaces the old one.</p>
@@ -91,17 +113,28 @@ export function renderProfile(view) {
             <div class="form-error"></div>
             <button class="btn">${hasRecoveryCode ? 'Make a new recovery code' : 'Create recovery code'}</button>
           </form>
-        </div>
+        </div>` : ''}
       </div>`;
 
     $('#p-logout', view).onclick = () => app.logout();
     loadLabels();
     const file = $('#p-file', view);
     $('#p-upload', view).onclick = () => file.click();
-    file.onchange = () => {
-      if (!file.files[0]) return;
+    file.onchange = async () => {
+      const picked = file.files[0];
+      file.value = ''; // so choosing the same file again still opens the editor
+      if (!picked) return;
+      if (!/^image\/(png|jpe?g|webp|gif)$/.test(picked.type)) return toast('Choose a PNG, JPG, WEBP or GIF image.', { error: true });
+      if (picked.size > 25 * 1024 * 1024) return toast('That image is too large (max 25 MB).', { error: true });
+      let cropped;
+      try {
+        cropped = await cropAvatar(picked, { name: store.me.displayName });
+      } catch (err) {
+        return toast(err.message, { error: true });
+      }
+      if (!cropped) return; // cancelled: the current photo stays
       const fd = new FormData();
-      fd.append('avatar', file.files[0]);
+      fd.append('avatar', cropped, 'avatar.jpg');
       busy($('#p-upload', view), async () => {
         try {
           store.me = (await api('/me/avatar', { method: 'POST', form: fd })).user;
@@ -116,6 +149,7 @@ export function renderProfile(view) {
     const remove = $('#p-remove', view);
     if (remove) {
       remove.onclick = async () => {
+        if (!(await confirmDialog('Remove your photo?', 'Your initials will be shown instead.', { confirmText: 'Remove photo', danger: true }))) return;
         store.me = (await api('/me/avatar', { method: 'DELETE' })).user;
         app.renderSidebar();
         draw();
@@ -141,17 +175,35 @@ export function renderProfile(view) {
       e.preventDefault();
       busy(pw.querySelector('button'), async () => {
         try {
-          await api('/me/password', { method: 'PATCH', body: { current: pw.current.value, next: pw.next.value } });
+          await api('/me/password', { method: 'PATCH', body: { current: pw.current?.value || '', next: pw.next.value } });
           pw.reset();
-          toast('Password updated');
+          toast(hasPassword ? 'Password updated' : 'Password set');
+          if (!hasPassword) {
+            hasPassword = true;
+            draw();
+          }
         } catch (err) {
           pw.querySelector('.form-error').textContent = err.message;
         }
       });
     });
 
+    const unlink = $('#g-unlink', view);
+    if (unlink) {
+      unlink.onclick = () => busy(unlink, async () => {
+        try {
+          await api('/me/google/unlink', { method: 'POST' });
+          google = null;
+          draw();
+          toast('Google disconnected');
+        } catch (err) {
+          toast(err.message, { error: true });
+        }
+      });
+    }
+
     const rc = $('#rc-form', view);
-    rc.addEventListener('submit', (e) => {
+    rc?.addEventListener('submit', (e) => {
       e.preventDefault();
       busy(rc.querySelector('button'), async () => {
         try {

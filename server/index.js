@@ -13,6 +13,7 @@ import accountRoutes from './routes/account.js';
 import groupRoutes from './routes/groups.js';
 import missionRoutes from './routes/missions.js';
 import labelRoutes from './routes/labels.js';
+import googleRoutes from './routes/google.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -30,7 +31,7 @@ app.get('/sw.js', (_req, res) => {
 });
 app.use(express.static(PUBLIC));
 
-app.use('/api', accountRoutes, groupRoutes, missionRoutes, labelRoutes);
+app.use('/api', googleRoutes, accountRoutes, groupRoutes, missionRoutes, labelRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 
 app.use((err, _req, res, _next) => {

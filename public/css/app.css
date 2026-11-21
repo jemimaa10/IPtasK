@@ -492,3 +492,32 @@ textarea.input { min-height: 90px; resize: vertical; }
 .public-head h1 { font-family: var(--font-display); font-size: 26px; margin: 0; }
 .public-head p { margin: 2px 0 0; color: var(--text-3); }
 .public-head p a { color: var(--lime); }
+
+/* ---------- Google sign-in ---------- */
+.btn-google { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1f1f1f; border-color: #dadce0; text-decoration: none; font-weight: 600; }
+.btn-google:hover { background: #f3f4f6; color: #1f1f1f; }
+.btn-google svg { width: 20px; height: 20px; flex: none; }
+.auth-or { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--text-3); font-size: 13px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--border, rgba(255,255,255,.1)); }
+.google-card p { margin: 0 0 12px; color: var(--text-2); }
+.google-card .btn-google { width: auto; }
+
+/* ---------- Profile photo editor ---------- */
+.crop-modal { max-width: 360px; }
+.crop-stage { position: relative; width: 280px; max-width: 100%; aspect-ratio: 1; margin: 0 auto 14px; border-radius: 14px; overflow: hidden; background: #000; cursor: grab; touch-action: none; user-select: none; outline: none; }
+.crop-stage:active { cursor: grabbing; }
+.crop-stage:focus-visible { box-shadow: 0 0 0 3px var(--lime); }
+.crop-stage canvas { display: block; width: 100%; height: 100%; }
+.crop-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, .58); border: 2px solid rgba(255, 255, 255, .85); pointer-events: none; }
+.crop-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--text-3); }
+.crop-zoom { flex: 1; min-width: 0; accent-color: var(--lime); }
+.crop-tools .btn { padding: 6px 10px; font-size: 13px; white-space: nowrap; }
+.crop-check { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 16px; }
+.crop-big { width: 140px; height: 140px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px var(--lime); }
+.crop-samples { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.crop-sample { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.crop-sample img { width: 36px; height: 36px; border-radius: 50%; }
+.crop-sample div { display: flex; flex-direction: column; font-size: 14px; }
+.crop-sample div span { color: var(--text-3); font-size: 12px; }
+.crop-sample.small { font-size: 13px; color: var(--text-2); }
+.crop-sample.small img { width: 22px; height: 22px; }

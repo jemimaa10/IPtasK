@@ -93,10 +93,16 @@ router.post('/auth/recover', (req, res) => {
 });
 
 router.get('/auth/me', requireAuth, (req, res) =>
-  res.json({ user: publicUser(req.user), hasRecoveryCode: Boolean(req.user.recovery_hash) })
+  res.json({
+    user: publicUser(req.user),
+    hasRecoveryCode: Boolean(req.user.recovery_hash),
+    hasPassword: Boolean(req.user.password_hash),
+    google: req.user.google_sub ? { email: req.user.email } : null,
+  })
 );
 
 router.post('/me/recovery-code', requireAuth, (req, res) => {
+  if (!req.user.password_hash) return res.status(400).json({ error: 'You log in with Google. Set a password first.' });
   if (!bcrypt.compareSync(String(req.body.password || ''), req.user.password_hash)) {
     return res.status(400).json({ error: 'Password is wrong.' });
   }
@@ -117,7 +123,8 @@ router.patch('/me', requireAuth, (req, res) => {
 });
 
 router.patch('/me/password', requireAuth, (req, res) => {
-  if (!bcrypt.compareSync(String(req.body.current || ''), req.user.password_hash)) {
+  // Google-only accounts have no password yet, so there is nothing to confirm.
+  if (req.user.password_hash && !bcrypt.compareSync(String(req.body.current || ''), req.user.password_hash)) {
     return res.status(400).json({ error: 'Current password is wrong.' });
   }
   const next = String(req.body.next || '');

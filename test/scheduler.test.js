@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 test('migrations ran: schema version and recovery column exist', () => {
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 3);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 4);
   const cols = (t) => all(`PRAGMA table_info(${t})`).map((c) => c.name);
   assert.ok(cols('users').includes('recovery_hash'));
   assert.ok(cols('groups').includes('reminder_every_days'));

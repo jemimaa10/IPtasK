@@ -55,6 +55,15 @@ export function userStats(userId, now = Date.now()) {
     ...summarize(missions),
     confessions: one('SELECT COUNT(*) AS c FROM confessions WHERE user_id = ?', userId).c,
     proofs: proofTimes.length,
+    // Work done for teammates: proofs this user approved, and proofs they sent back for revision.
+    checkedForOthers: one(
+      `SELECT COUNT(DISTINCT r.proof_id) AS c FROM reviews r JOIN proofs p ON p.id = r.proof_id
+       WHERE r.reviewer_id = ? AND r.type = 'checked' AND p.user_id != ?`, userId, userId
+    ).c,
+    revisionsAsked: one(
+      `SELECT COUNT(DISTINCT r.proof_id) AS c FROM reviews r JOIN proofs p ON p.id = r.proof_id
+       WHERE r.reviewer_id = ? AND r.type != 'checked' AND p.user_id != ?`, userId, userId
+    ).c,
     streak: streaks(proofTimes, now),
   };
 }

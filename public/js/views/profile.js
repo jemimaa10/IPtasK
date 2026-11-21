@@ -6,17 +6,25 @@ import { labelCard, bindLabelActions } from './labels.js';
 
 export function statsHtml(st, { own = true } = {}) {
   if (!st) return '<div class="loading"><span class="spinner"></span></div>';
-  const tile = (value, label, tone = '') => `<div class="stat ${tone}"><b>${value}</b><span>${label}</span></div>`;
+  const who = own ? 'you' : 'they';
+  const tile = (value, label, hint, tone = '') =>
+    `<div class="stat ${tone}" title="${hint}"><b>${value}</b><span>${label}</span></div>`;
+  const fact = (value, label, hint, tone = '') =>
+    `<span class="stat-fact ${value ? tone : ''}" title="${hint}"><b>${value}</b> ${label}</span>`;
   return `
     <div class="stat-grid">
-      ${tile(`🔥 ${st.streak.current}`, `day streak · best ${st.streak.best}`, 'lime')}
-      ${tile(st.completionRate == null ? '—' : `${st.completionRate}%`, 'finished on time')}
-      ${tile(st.verified, 'verified', 'green')}
-      ${tile(st.failed + st.unverified, 'failed / unverified', 'red')}
-      ${tile(st.open, 'still open')}
-      ${tile(st.confessions, 'confessions')}
+      ${tile(`🔥 ${st.streak.current}`, `day streak · best ${st.streak.best}`, `Days in a row ${who} uploaded at least one proof. Today doesn't break it until it's over.`, 'lime')}
+      ${tile(st.completionRate == null ? '—' : `${st.completionRate}%`, 'on time', 'Share of finished jobdesks that got verified before the deadline.')}
+      ${tile(st.verified, 'jobdesks done', `${own ? 'Your' : 'Their'} jobdesks that every teammate checked.`, 'green')}
     </div>
-    <small class="stat-note">Streak = days in a row ${own ? 'you' : 'they'} uploaded at least one proof. Today doesn't break it until it's over.</small>`;
+    <div class="stat-facts">
+      ${fact(st.open, 'open', 'Jobdesks still in progress.')}
+      ${fact(st.failed + st.unverified, 'failed', 'Missed the deadline or never got verified.', 'red')}
+      ${fact(st.proofs ?? 0, 'proofs', 'Proofs uploaded.')}
+      ${fact(st.checkedForOthers ?? 0, 'checked for teammates', `Teammates' proofs ${who} approved.`)}
+      ${fact(st.revisionsAsked ?? 0, 'revisions asked', `Teammates' proofs ${who} sent back for revision.`)}
+      ${fact(st.confessions, 'confessions', 'Times exposed on the confession wall.', 'red')}
+    </div>`;
 }
 
 export function renderProfile(view) {

@@ -393,7 +393,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 
 /* ---------- stats, leaderboard, recovery ---------- */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
 .stat b { font-family: var(--font-display); font-size: 24px; line-height: 1.2; }
 .stat span { font-size: 12px; color: var(--text-3); }
@@ -521,3 +521,6 @@ textarea.input { min-height: 90px; resize: vertical; }
 .crop-sample div span { color: var(--text-3); font-size: 12px; }
 .crop-sample.small { font-size: 13px; color: var(--text-2); }
 .crop-sample.small img { width: 22px; height: 22px; }
+.stat-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 13px; color: var(--text-3); }
+.stat-fact b { color: var(--text-2); font-weight: 600; }
+.stat-fact.red b { color: var(--red, #ff5c7a); }

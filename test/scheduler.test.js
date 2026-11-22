@@ -57,7 +57,7 @@ beforeEach(async () => {
 test('schema is in place: version, columns, case-insensitive usernames', async () => {
   assert.equal(await schemaVersion(), 0);
   const cols = async (t) =>
-    (await all('SELECT column_name FROM information_schema.columns WHERE table_name = ?', t)).map((c) => c.column_name);
+    (await all('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', t)).map((c) => c.column_name);
   assert.ok((await cols('users')).includes('recovery_hash'));
   assert.ok((await cols('users')).includes('google_sub'));
   assert.ok((await cols('groups')).includes('reminder_every_days'));

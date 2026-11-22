@@ -35,7 +35,7 @@ await tx(async () => {
       continue;
     }
     // Only columns both sides have (old columns such as missions.last_daily_reminder are left behind).
-    const target = new Set((await all('SELECT column_name FROM information_schema.columns WHERE table_name = ?', table)).map((c) => c.column_name));
+    const target = new Set((await all('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', table)).map((c) => c.column_name));
     const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name).filter((c) => target.has(c));
     const rows = sqlite.prepare(`SELECT ${cols.join(', ')} FROM ${table}`).all();
     const sql = `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
@@ -44,7 +44,7 @@ await tx(async () => {
   }
   // Ids were copied as they were; new rows must continue after the highest one.
   for (const table of TABLES) {
-    if (!(await one("SELECT 1 FROM information_schema.columns WHERE table_name = ? AND column_name = 'id'", table))) continue;
+    if (!(await one("SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = 'id'", table))) continue;
     await exec(`SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 0) + 1, false)`);
   }
 });

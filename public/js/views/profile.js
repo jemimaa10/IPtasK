@@ -65,7 +65,7 @@ export function renderProfile(view) {
     view.innerHTML = `
       <div class="page" style="max-width:640px">
         <div class="page-head"><div><h1>Profile</h1><p>This is how you appear in chats, the proof feed — and on confession posts.</p></div>
-          <div style="display:flex;gap:8px"><a class="btn btn-ghost" href="#/user/${store.me.id}">View public profile</a><button class="btn btn-ghost" id="p-logout">Log out</button></div></div>
+          <div style="display:flex;gap:8px"><a class="btn btn-ghost" href="#/user/${store.me.id}">View public profile</a></div></div>
         <div id="p-labels"></div>
         <div class="section" style="margin-top:0">
           <h2 class="section-title">Your track record</h2>
@@ -122,6 +122,7 @@ export function renderProfile(view) {
             <button class="btn">${hasRecoveryCode ? 'Make a new recovery code' : 'Create recovery code'}</button>
           </form>
         </div>` : ''}
+        <div class="profile-logout"><button class="btn btn-logout" id="p-logout">Log out</button></div>
       </div>`;
 
     $('#p-logout', view).onclick = () => app.logout();

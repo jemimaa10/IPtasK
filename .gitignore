@@ -2,3 +2,12 @@ node_modules/
 data/
 uploads/
 .env
+# Android app: the signing key must never be committed; build outputs are regenerated
+android/signing/
+android/*.apk
+android/*.idsig
+android/project/build/
+android/project/app/build/
+android/project/.gradle/
+android/project/local.properties
+android/*.zip

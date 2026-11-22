@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.iptask.android",
+      "sha256_cert_fingerprints": ["03:E7:B1:A6:7C:91:59:68:8F:73:56:56:D5:98:5F:7C:5E:C3:CA:A7:A5:3F:79:11:23:57:22:4E:94:A0:60:1E"]
+    }
+  }
+]

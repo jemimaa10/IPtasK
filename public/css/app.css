@@ -547,21 +547,25 @@ textarea.input { min-height: 90px; resize: vertical; }
 :root[data-theme="light"] .nav a:hover,
 :root[data-theme="light"] .group-link:hover { background: rgba(255, 255, 255, .7); }
 @media (min-width: 861px) {
-  /* Sidebar floats on the gradient; the page sits on a white rounded panel that scrolls on its own.
-     Paddings inside are 14px smaller, so text lands exactly where it is in dark mode. */
-  :root[data-theme="light"] .shell { height: 100vh; overflow: hidden; }
-  :root[data-theme="light"] .sidebar { background: transparent; border-right-color: transparent; }
+  /* Both themes: the sidebar sits on the page background and the content is a rounded panel that scrolls on its own. */
+  :root:not([data-theme="light"]) body { background: var(--bg-2); }
+  .shell { height: 100vh; overflow: hidden; }
+  .sidebar { background: transparent; border-right-color: transparent; }
   :root[data-theme="light"] .sidebar-footer { border-top-color: rgba(0, 0, 0, .06); }
-  :root[data-theme="light"] .shell > div {
+  .shell > div {
     margin: 14px 14px 14px 0; padding-left: 14px; height: calc(100vh - 28px); overflow-y: auto;
     background: var(--bg); border-radius: 26px;
-    box-shadow: 0 1px 2px rgba(36, 74, 50, .05), 0 20px 60px rgba(36, 74, 50, .12);
-    border: 1px solid rgba(255, 255, 255, .8);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 20px 60px rgba(0, 0, 0, .35);
+    border: 1px solid var(--border);
   }
-  :root[data-theme="light"] .page { padding-top: 17px; }
-  :root[data-theme="light"] .group-header { margin-left: -14px; padding-left: 14px; }
-  :root[data-theme="light"] .group-header-inner { padding-top: 3px; }
-  :root[data-theme="light"] .chat { height: calc(100vh - 144px); }
+  :root[data-theme="light"] .shell > div {
+    box-shadow: 0 1px 2px rgba(36, 74, 50, .05), 0 20px 60px rgba(36, 74, 50, .12);
+    border-color: rgba(255, 255, 255, .8);
+  }
+  .page { padding-top: 17px; }
+  .group-header { margin-left: -14px; padding-left: 14px; }
+  .group-header-inner { padding-top: 3px; }
+  .chat { height: calc(100vh - 144px); }
 }
 
 /* ---------- theme switch (Home) ---------- */

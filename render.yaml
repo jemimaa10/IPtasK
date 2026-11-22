@@ -1,0 +1,32 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo. Fill in the secret values when asked.
+services:
+  - type: web
+    name: iptask
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Asia/Jakarta
+      # Supabase → Connect → Session pooler
+      - key: DATABASE_URL
+        sync: false
+      # Supabase → Project Settings → API Keys
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Optional: Continue with Google. PUBLIC_URL = https://<service name>.onrender.com
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: PUBLIC_URL
+        sync: false

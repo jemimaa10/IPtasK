@@ -18,8 +18,14 @@ export const GEMINI_MODELS = (process.env.GEMINI_MODEL || 'gemini-3.5-flash,gemi
   .map((m) => m.trim())
   .filter(Boolean);
 export const UPLOAD_DIR = path.join(ROOT, 'uploads');
-// ':memory:' is handy for tests.
-export const DB_PATH = process.env.IPTASK_DB_PATH || path.join(ROOT, 'data', 'iptask.db');
+// Postgres connection string (Supabase → Connect → Session pooler). Without it, a local PGlite database is used.
+export const DATABASE_URL = process.env.DATABASE_URL || '';
+// Local PGlite data folder; ':memory:' is handy for tests.
+export const DB_PATH = process.env.IPTASK_DB_PATH || path.join(ROOT, 'data', 'pglite');
+// Supabase Storage for avatars and proof files. Without these, files go to the uploads/ folder.
+export const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+export const STORAGE_BUCKET = process.env.STORAGE_BUCKET || 'iptask';
 export const IS_PROD = process.env.NODE_ENV === 'production';
 // Set when running behind a reverse proxy (nginx, Railway, Render…) so req.ip and HTTPS detection work.
 export const TRUST_PROXY = process.env.TRUST_PROXY || (IS_PROD ? '1' : '');

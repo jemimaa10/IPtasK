@@ -13,12 +13,13 @@ npm start              # or: npm run dev (auto-restart on changes)
 - Landing page: http://localhost:3000
 - App: http://localhost:3000/app
 
-Requires Node.js 22.13+ (uses the built-in `node:sqlite`). Data lives in `data/iptask.db`, uploads in `uploads/`.
+Requires Node.js 22.13+. The database is Postgres: locally a built-in [PGlite](https://pglite.dev) database in `data/pglite` (nothing to install), and any Postgres such as Supabase once `DATABASE_URL` is set. Uploads go to `uploads/`, or to Supabase Storage once `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` are set.
 
 ```bash
-npm test               # scheduler rules, streaks and migrations, on an in-memory database
+npm test               # scheduler rules, streaks, labels and the query layer, on an in-memory database
 npm run seed           # demo users: ketua / anggota1 / anggota2, password demo123
 npm run seed:beban     # label showcase: budi (2 labels), sari, rizky (hasn't voted), putri — password demo123
+npm run import:sqlite  # one-time: copy the old SQLite data/iptask.db (+ uploads/) into the configured database/storage
 ```
 
 ## How the rules work
@@ -72,7 +73,10 @@ The scheduler runs every minute inside the server process (`server/missions.js`)
 ```
 server/
   index.js         Express + Socket.IO bootstrap
-  db.js            SQLite schema + numbered migrations (PRAGMA user_version)
+  db.js            Postgres (pg or PGlite), async query helpers, schema + numbered migrations
+  uploads.js       avatar/proof storage: uploads/ folder or Supabase Storage
+  router.js        express.Router whose handlers may be async
+  import-sqlite.js one-time move from the old SQLite database
   security.js      login rate limiting, security headers
   stats.js         streaks, profile stats, group leaderboard
   labels.js        "Beban <group>" labels and redeem votes
@@ -88,25 +92,27 @@ test/              node:test suites
 
 ## Changing the database schema
 
-Add a function to the end of `MIGRATIONS` in `server/db.js` (for example an `ALTER TABLE`). It runs once on the next start and bumps `PRAGMA user_version`. Never edit or reorder a migration that has already shipped.
+Add an async function to the end of `MIGRATIONS` in `server/db.js` (for example `() => exec('ALTER TABLE …')`). It runs once on the next start and bumps the `schema_version` table. Never edit or reorder a migration that has already shipped. Queries use `?` placeholders and are all async: `await one(…)`, `await all(…)`, `await run(…)`, `await tx(async () => …)`.
 
-## Deploying
+## Deploying for free: Render + Supabase
 
-Any host that runs a long-lived Node 22.13+ process with a persistent disk works (a VPS, Railway or Render with a volume, Fly.io with a volume). Serverless platforms do not: the scheduler and Socket.IO need the process to stay up, and SQLite needs a real disk.
+Supabase holds the data (Postgres) and the files (Storage); Render runs the server. Both have free plans without a credit card.
 
-1. `npm ci --omit=dev`
-2. Set the environment: `NODE_ENV=production`, `PORT`, `GEMINI_API_KEY` (optional), and `TRUST_PROXY` = how many proxies sit in front (default `1` in production).
-3. Put it behind HTTPS (the platform's TLS, or nginx/Caddy). Secure cookies need HTTPS, and Socket.IO needs WebSocket upgrade allowed (`proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` on nginx).
-4. Keep it running with the platform's process manager, `pm2 start server/index.js --name iptask`, or a systemd service.
-5. Run **one** instance only: login limits and the scheduler live in memory.
+**1. Supabase** (supabase.com → New project, region Singapore)
+- *Connect* → **Session pooler** → copy the URI and put your database password in it → `DATABASE_URL`.
+- *Project Settings → API Keys* → the **secret** key (or legacy `service_role`) → `SUPABASE_SERVICE_KEY`; the project URL `https://<ref>.supabase.co` → `SUPABASE_URL`. Keep the secret key on the server only.
+- The app creates its tables and a private `iptask` storage bucket on first start.
+
+**2. Move existing data (optional)** from your laptop: put the three values in `.env`, then `npm run import:sqlite`. It copies `data/iptask.db` and `uploads/` into Supabase (the target must be empty). Remove them from `.env` afterwards if you want local development to use the local database again.
+
+**3. Render** (render.com → New → **Blueprint** → this GitHub repo). `render.yaml` sets everything up; fill in `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and optionally `GEMINI_API_KEY`. The app runs at `https://<name>.onrender.com`.
+
+**4. Keep it awake**: the free Render plan sleeps after 15 minutes without visits (the first visit then takes ~1 minute, and reminders wait). Create a free job on cron-job.org that opens `https://<name>.onrender.com/healthz` every 10 minutes. That also keeps the Supabase project active (free projects pause after a week without use).
+
+**5. Google sign-in (optional)**: add `https://<name>.onrender.com/api/auth/google/callback` to the OAuth client's redirect URIs and set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `PUBLIC_URL=https://<name>.onrender.com` on Render.
+
+Other hosts work the same way: a long-lived Node 22.13+ process (the scheduler and Socket.IO need it to stay up, so not serverless), `NODE_ENV=production`, HTTPS in front (Socket.IO needs WebSocket upgrade allowed), and **one** instance only (login limits and the scheduler live in memory).
 
 ### Backups
 
-Everything is in two folders: `data/` (database) and `uploads/` (avatars and proofs). For a consistent database copy while the server runs:
-
-```bash
-sqlite3 data/iptask.db ".backup 'backup/iptask-$(date +%F).db'"
-tar czf backup/uploads-$(date +%F).tgz uploads/
-```
-
-Run it daily (cron) and keep copies off the server.
+Supabase free projects have no automatic backups. To keep a copy: `pg_dump "$DATABASE_URL" > iptask-$(date +%F).sql`, and download the `iptask` bucket from the Supabase dashboard (Storage).

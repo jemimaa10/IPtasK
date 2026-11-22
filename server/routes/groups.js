@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router } from '../router.js';
 import { one, all, run, tx } from '../db.js';
 import { requireAuth, publicUser, getUser } from '../auth.js';
 import { notify, emitToGroup, emitToUser } from '../realtime.js';
@@ -15,9 +15,9 @@ export function membership(groupId, userId) {
 }
 
 /** Loads the group into req.group / req.member, or 404s. Pass leaderOnly to restrict. */
-export const loadGroup = (leaderOnly = false) => (req, res, next) => {
-  const group = one('SELECT * FROM groups WHERE id = ?', Number(req.params.groupId));
-  const member = group && membership(group.id, req.user.id);
+export const loadGroup = (leaderOnly = false) => async (req, res, next) => {
+  const group = await one('SELECT * FROM groups WHERE id = ?', Number(req.params.groupId));
+  const member = group && (await membership(group.id, req.user.id));
   if (!member) return res.status(404).json({ error: 'Group not found.' });
   if (leaderOnly && group.leader_id !== req.user.id) {
     return res.status(403).json({ error: 'Only the group leader can do this.' });
@@ -27,12 +27,19 @@ export const loadGroup = (leaderOnly = false) => (req, res, next) => {
   next();
 };
 
-function groupMembers(groupId) {
-  return all(
+async function groupMembers(groupId) {
+  return (await all(
     `SELECT u.*, gm.role, gm.joined_at FROM group_members gm JOIN users u ON u.id = gm.user_id
      WHERE gm.group_id = ? ORDER BY gm.role = 'leader' DESC, u.display_name`,
     groupId
-  ).map((u) => ({ ...publicUser(u), role: u.role, joinedAt: u.joined_at }));
+  )).map((u) => ({ ...publicUser(u), role: u.role, joinedAt: u.joined_at }));
+}
+
+/** Re-checks unfinished proofs after membership changes (a new reviewer joined, or one left). */
+async function refreshOpenMissions(groupId) {
+  for (const m of await all("SELECT id FROM missions WHERE group_id = ? AND status IN ('submitted','revision')", groupId)) {
+    await refreshMissionStatus(m.id);
+  }
 }
 
 function groupView(group, userId) {
@@ -48,8 +55,8 @@ function groupView(group, userId) {
   };
 }
 
-router.get('/groups', (req, res) => {
-  const rows = all(
+router.get('/groups', async (req, res) => {
+  const rows = await all(
     `SELECT g.*,
        (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) AS member_count,
        (SELECT COUNT(*) FROM missions WHERE group_id = g.id AND assignee_id = ? AND status IN ('open','revision')) AS my_open,
@@ -68,73 +75,73 @@ router.get('/groups', (req, res) => {
   });
 });
 
-router.post('/groups', (req, res) => {
+router.post('/groups', async (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name || name.length > 60) return res.status(400).json({ error: 'Group name must be 1–60 characters.' });
   const grace = Math.min(168, Math.max(1, Number(req.body.verifyGraceHours) || 24));
-  const id = tx(() => {
-    const info = run(
+  const id = await tx(async () => {
+    const info = await run(
       'INSERT INTO groups (name, description, leader_id, verify_grace_hours, reminder_every_days, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       name, String(req.body.description || '').trim().slice(0, 300), req.user.id, grace,
       parseReminderDays(req.body.reminderEveryDays, 1), Date.now()
     );
     const groupId = Number(info.lastInsertRowid);
-    run("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'leader', ?)", groupId, req.user.id, Date.now());
+    await run("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'leader', ?)", groupId, req.user.id, Date.now());
     return groupId;
   });
-  res.json({ group: groupView(one('SELECT * FROM groups WHERE id = ?', id), req.user.id) });
+  res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', id), req.user.id) });
 });
 
-router.get('/groups/:groupId', loadGroup(), (req, res) => {
+router.get('/groups/:groupId', loadGroup(), async (req, res) => {
   const pendingInvites = req.group.leader_id === req.user.id
-    ? all(
+    ? (await all(
         `SELECT i.id AS invite_id, i.invitee_id, u.username, u.display_name, u.avatar_path
          FROM invites i JOIN users u ON u.id = i.invitee_id
          WHERE i.group_id = ? AND i.status = 'pending'`,
         req.group.id
-      ).map((r) => ({ inviteId: r.invite_id, user: publicUser({ ...r, id: r.invitee_id }) }))
+      )).map((r) => ({ inviteId: r.invite_id, user: publicUser({ ...r, id: r.invitee_id }) }))
     : [];
   res.json({
     group: groupView(req.group, req.user.id),
-    members: groupMembers(req.group.id),
+    members: await groupMembers(req.group.id),
     pendingInvites,
     aiEnabled: aiEnabled(),
   });
 });
 
-router.patch('/groups/:groupId', loadGroup(true), (req, res) => {
+router.patch('/groups/:groupId', loadGroup(true), async (req, res) => {
   const name = String(req.body.name ?? req.group.name).trim();
   if (!name || name.length > 60) return res.status(400).json({ error: 'Group name must be 1–60 characters.' });
   const grace = Math.min(168, Math.max(1, Number(req.body.verifyGraceHours ?? req.group.verify_grace_hours) || 24));
-  run(
+  await run(
     'UPDATE groups SET name = ?, description = ?, verify_grace_hours = ?, reminder_every_days = ? WHERE id = ?',
     name, String(req.body.description ?? req.group.description).trim().slice(0, 300), grace,
     parseReminderDays(req.body.reminderEveryDays, req.group.reminder_every_days), req.group.id
   );
   emitToGroup(req.group.id, 'group:changed');
-  res.json({ group: groupView(one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
+  res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
 });
 
-router.delete('/groups/:groupId', loadGroup(true), (req, res) => {
+router.delete('/groups/:groupId', loadGroup(true), async (req, res) => {
   emitToGroup(req.group.id, 'group:deleted', { groupId: req.group.id });
-  run('DELETE FROM groups WHERE id = ?', req.group.id);
+  await run('DELETE FROM groups WHERE id = ?', req.group.id);
   res.json({ ok: true });
 });
 
 // ---------- invites & members ----------
 
-router.post('/groups/:groupId/invites', loadGroup(true), (req, res) => {
-  const invitee = one('SELECT * FROM users WHERE username = ?', String(req.body.username || '').trim());
+router.post('/groups/:groupId/invites', loadGroup(true), async (req, res) => {
+  const invitee = await one('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', String(req.body.username || '').trim());
   if (!invitee) return res.status(404).json({ error: 'No user with that username.' });
-  if (membership(req.group.id, invitee.id)) return res.status(409).json({ error: 'They are already in this group.' });
-  if (one("SELECT 1 FROM invites WHERE group_id = ? AND invitee_id = ? AND status = 'pending'", req.group.id, invitee.id)) {
+  if (await membership(req.group.id, invitee.id)) return res.status(409).json({ error: 'They are already in this group.' });
+  if (await one("SELECT 1 FROM invites WHERE group_id = ? AND invitee_id = ? AND status = 'pending'", req.group.id, invitee.id)) {
     return res.status(409).json({ error: 'They already have a pending invite.' });
   }
-  run(
+  await run(
     'INSERT INTO invites (group_id, inviter_id, invitee_id, created_at) VALUES (?, ?, ?, ?)',
     req.group.id, req.user.id, invitee.id, Date.now()
   );
-  notify(invitee.id, {
+  await notify(invitee.id, {
     type: 'invite',
     title: `${req.user.display_name} invited you to "${req.group.name}"`,
     body: 'Open your home page to accept or decline.',
@@ -145,17 +152,17 @@ router.post('/groups/:groupId/invites', loadGroup(true), (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/groups/:groupId/invites/:inviteId', loadGroup(true), (req, res) => {
-  const invite = one('SELECT * FROM invites WHERE id = ? AND group_id = ?', Number(req.params.inviteId), req.group.id);
+router.delete('/groups/:groupId/invites/:inviteId', loadGroup(true), async (req, res) => {
+  const invite = await one('SELECT * FROM invites WHERE id = ? AND group_id = ?', Number(req.params.inviteId), req.group.id);
   if (invite) {
-    run('DELETE FROM invites WHERE id = ?', invite.id);
+    await run('DELETE FROM invites WHERE id = ?', invite.id);
     emitToUser(invite.invitee_id, 'invites:changed');
   }
   res.json({ ok: true });
 });
 
-router.get('/invites', (req, res) => {
-  const rows = all(
+router.get('/invites', async (req, res) => {
+  const rows = await all(
     `SELECT i.id, i.created_at, i.inviter_id, g.name AS group_name, g.id AS group_id,
        u.username, u.display_name, u.avatar_path
      FROM invites i JOIN groups g ON g.id = i.group_id JOIN users u ON u.id = i.inviter_id
@@ -173,18 +180,25 @@ router.get('/invites', (req, res) => {
   });
 });
 
-router.post('/invites/:id/:action(accept|decline)', (req, res) => {
-  const invite = one("SELECT * FROM invites WHERE id = ? AND invitee_id = ? AND status = 'pending'", Number(req.params.id), req.user.id);
-  if (!invite) return res.status(404).json({ error: 'Invite not found.' });
+router.post('/invites/:id/:action(accept|decline)', async (req, res) => {
   const accepted = req.params.action === 'accept';
-  tx(() => {
-    run('UPDATE invites SET status = ? WHERE id = ?', accepted ? 'accepted' : 'declined', invite.id);
-    if (accepted) {
-      run("INSERT OR IGNORE INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", invite.group_id, req.user.id, Date.now());
+  // Claiming the invite in the UPDATE makes a double click count once.
+  const invite = await tx(async () => {
+    const { row } = await run(
+      "UPDATE invites SET status = ? WHERE id = ? AND invitee_id = ? AND status = 'pending' RETURNING *",
+      accepted ? 'accepted' : 'declined', Number(req.params.id), req.user.id
+    );
+    if (row && accepted) {
+      await run(
+        "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?) ON CONFLICT DO NOTHING",
+        row.group_id, req.user.id, Date.now()
+      );
     }
+    return row;
   });
-  const group = one('SELECT * FROM groups WHERE id = ?', invite.group_id);
-  notify(invite.inviter_id, {
+  if (!invite) return res.status(404).json({ error: 'Invite not found.' });
+  const group = await one('SELECT * FROM groups WHERE id = ?', invite.group_id);
+  await notify(invite.inviter_id, {
     type: 'invite_response',
     title: `${req.user.display_name} ${accepted ? 'joined' : 'declined to join'} "${group.name}"`,
     link: `#/group/${group.id}/members`,
@@ -193,14 +207,12 @@ router.post('/invites/:id/:action(accept|decline)', (req, res) => {
   if (accepted) {
     emitToGroup(group.id, 'group:changed');
     // A new reviewer joined: in-progress proofs now need their check too.
-    for (const m of all("SELECT id FROM missions WHERE group_id = ? AND status IN ('submitted','revision')", group.id)) {
-      refreshMissionStatus(m.id);
-    }
+    await refreshOpenMissions(group.id);
   }
   res.json({ ok: true, groupId: accepted ? group.id : null });
 });
 
-router.delete('/groups/:groupId/members/:userId', loadGroup(), (req, res) => {
+router.delete('/groups/:groupId/members/:userId', loadGroup(), async (req, res) => {
   const targetId = Number(req.params.userId);
   const isSelf = targetId === req.user.id;
   if (!isSelf && req.group.leader_id !== req.user.id) {
@@ -209,21 +221,19 @@ router.delete('/groups/:groupId/members/:userId', loadGroup(), (req, res) => {
   if (targetId === req.group.leader_id) {
     return res.status(400).json({ error: 'The leader cannot leave. Make someone else leader first, or delete the group.' });
   }
-  tx(() => {
-    run('DELETE FROM group_members WHERE group_id = ? AND user_id = ?', req.group.id, targetId);
+  await tx(async () => {
+    await run('DELETE FROM group_members WHERE group_id = ? AND user_id = ?', req.group.id, targetId);
     // Unfinished missions of someone who left are no longer meaningful.
-    run(
+    await run(
       `DELETE FROM missions WHERE group_id = ? AND assignee_id = ? AND status NOT IN (${FINAL_STATUSES.map(() => '?').join(',')})`,
       req.group.id, targetId, ...FINAL_STATUSES
     );
   });
   // Their missing check no longer blocks anyone's verification, and their missing vote no longer blocks a redeem.
-  for (const m of all("SELECT id FROM missions WHERE group_id = ? AND status IN ('submitted','revision')", req.group.id)) {
-    refreshMissionStatus(m.id);
-  }
-  reevaluateGroupRedeems(req.group.id);
+  await refreshOpenMissions(req.group.id);
+  await reevaluateGroupRedeems(req.group.id);
   if (!isSelf) {
-    notify(targetId, { type: 'removed', title: `You were removed from "${req.group.name}"`, link: '#/home' });
+    await notify(targetId, { type: 'removed', title: `You were removed from "${req.group.name}"`, link: '#/home' });
   }
   emitToGroup(req.group.id, 'group:changed');
   emitToGroup(req.group.id, 'missions:changed');
@@ -231,16 +241,16 @@ router.delete('/groups/:groupId/members/:userId', loadGroup(), (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/groups/:groupId/transfer', loadGroup(true), (req, res) => {
+router.post('/groups/:groupId/transfer', loadGroup(true), async (req, res) => {
   const targetId = Number(req.body.userId);
   if (targetId === req.user.id) return res.status(400).json({ error: 'You are already the leader.' });
-  if (!membership(req.group.id, targetId)) return res.status(400).json({ error: 'The new leader must be a member of this group.' });
-  tx(() => {
-    run('UPDATE groups SET leader_id = ? WHERE id = ?', targetId, req.group.id);
-    run("UPDATE group_members SET role = 'member' WHERE group_id = ? AND user_id = ?", req.group.id, req.user.id);
-    run("UPDATE group_members SET role = 'leader' WHERE group_id = ? AND user_id = ?", req.group.id, targetId);
+  if (!(await membership(req.group.id, targetId))) return res.status(400).json({ error: 'The new leader must be a member of this group.' });
+  await tx(async () => {
+    await run('UPDATE groups SET leader_id = ? WHERE id = ?', targetId, req.group.id);
+    await run("UPDATE group_members SET role = 'member' WHERE group_id = ? AND user_id = ?", req.group.id, req.user.id);
+    await run("UPDATE group_members SET role = 'leader' WHERE group_id = ? AND user_id = ?", req.group.id, targetId);
   });
-  notify(targetId, {
+  await notify(targetId, {
     type: 'leader',
     title: `You are now the leader of "${req.group.name}"`,
     body: `${req.user.display_name} handed the group over to you.`,
@@ -251,9 +261,9 @@ router.post('/groups/:groupId/transfer', loadGroup(true), (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/groups/:groupId/leaderboard', loadGroup(), (req, res) => {
+router.get('/groups/:groupId/leaderboard', loadGroup(), async (req, res) => {
   res.json({
-    rows: groupLeaderboard(req.group.id).map(({ user, ...stats }) => ({ user: publicUser(user), ...stats })),
+    rows: (await groupLeaderboard(req.group.id)).map(({ user, ...stats }) => ({ user: publicUser(user), ...stats })),
   });
 });
 
@@ -264,8 +274,8 @@ function csvCell(value) {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-router.get('/groups/:groupId/export.csv', loadGroup(true), (req, res) => {
-  const rows = all(
+router.get('/groups/:groupId/export.csv', loadGroup(true), async (req, res) => {
+  const rows = await all(
     `SELECT m.*, u.username, u.display_name,
        (SELECT COUNT(*) FROM proofs p WHERE p.mission_id = m.id) AS proof_count,
        (SELECT MAX(created_at) FROM proofs p WHERE p.mission_id = m.id) AS last_proof_at
@@ -285,14 +295,14 @@ router.get('/groups/:groupId/export.csv', loadGroup(true), (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="iptask-${safeName}-missions.csv"`);
   // BOM so Excel reads UTF-8 names correctly.
-  res.send('\uFEFF' + lines.map((l) => l.map(csvCell).join(',')).join('\r\n'));
+  res.send('﻿' + lines.map((l) => l.map(csvCell).join(',')).join('\r\n'));
 });
 
 // ---------- free chat ----------
 
-router.get('/groups/:groupId/messages', loadGroup(), (req, res) => {
-  const before = Number(req.query.before) || Number.MAX_SAFE_INTEGER;
-  const rows = all(
+router.get('/groups/:groupId/messages', loadGroup(), async (req, res) => {
+  const before = Math.floor(Number(req.query.before)) || Number.MAX_SAFE_INTEGER;
+  const rows = await all(
     `SELECT m.id, m.body, m.created_at, m.user_id, u.username, u.display_name, u.avatar_path
      FROM messages m JOIN users u ON u.id = m.user_id
      WHERE m.group_id = ? AND m.id < ? ORDER BY m.id DESC LIMIT 50`,
@@ -308,13 +318,13 @@ router.get('/groups/:groupId/messages', loadGroup(), (req, res) => {
   });
 });
 
-router.post('/groups/:groupId/messages', loadGroup(), (req, res) => {
+router.post('/groups/:groupId/messages', loadGroup(), async (req, res) => {
   const body = String(req.body.body || '').trim();
   if (!body) return res.status(400).json({ error: 'Message is empty.' });
   if (body.length > 2000) return res.status(400).json({ error: 'Message is too long.' });
   const createdAt = Date.now();
-  const info = run('INSERT INTO messages (group_id, user_id, body, created_at) VALUES (?, ?, ?, ?)', req.group.id, req.user.id, body, createdAt);
-  const message = { id: Number(info.lastInsertRowid), body, createdAt, user: getUser(req.user.id), groupId: req.group.id };
+  const info = await run('INSERT INTO messages (group_id, user_id, body, created_at) VALUES (?, ?, ?, ?)', req.group.id, req.user.id, body, createdAt);
+  const message = { id: Number(info.lastInsertRowid), body, createdAt, user: await getUser(req.user.id), groupId: req.group.id };
   emitToGroup(req.group.id, 'message', message);
   res.json({ message });
 });
@@ -329,7 +339,7 @@ router.post('/groups/:groupId/ai/split', loadGroup(true), async (req, res) => {
     const result = await splitJobdesk({
       groupName: req.group.name,
       brief: brief.slice(0, 4000),
-      members: groupMembers(req.group.id),
+      members: await groupMembers(req.group.id),
       startDate: String(req.body.startDate || new Date().toISOString().slice(0, 10)),
       endDate: String(req.body.endDate || ''),
     });
@@ -342,8 +352,8 @@ router.post('/groups/:groupId/ai/split', loadGroup(true), async (req, res) => {
 
 // ---------- stories (confessions across my circles) ----------
 
-router.get('/stories', (req, res) => {
-  const rows = all(
+router.get('/stories', async (req, res) => {
+  const rows = await all(
     `SELECT c.*, g.name AS group_name, m.title AS mission_title,
        u.username, u.display_name, u.avatar_path
      FROM confessions c

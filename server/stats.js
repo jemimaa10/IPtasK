@@ -48,43 +48,43 @@ function summarize(rows) {
   };
 }
 
-export function userStats(userId, now = Date.now()) {
-  const missions = all('SELECT status FROM missions WHERE assignee_id = ?', userId);
-  const proofTimes = all('SELECT created_at FROM proofs WHERE user_id = ?', userId).map((r) => r.created_at);
+export async function userStats(userId, now = Date.now()) {
+  const missions = await all('SELECT status FROM missions WHERE assignee_id = ?', userId);
+  const proofTimes = (await all('SELECT created_at FROM proofs WHERE user_id = ?', userId)).map((r) => r.created_at);
+  const count = async (sql, ...params) => (await one(sql, ...params)).c;
   return {
     ...summarize(missions),
-    confessions: one('SELECT COUNT(*) AS c FROM confessions WHERE user_id = ?', userId).c,
+    confessions: await count('SELECT COUNT(*) AS c FROM confessions WHERE user_id = ?', userId),
     proofs: proofTimes.length,
     // Work done for teammates: proofs this user approved, and proofs they sent back for revision.
-    checkedForOthers: one(
+    checkedForOthers: await count(
       `SELECT COUNT(DISTINCT r.proof_id) AS c FROM reviews r JOIN proofs p ON p.id = r.proof_id
        WHERE r.reviewer_id = ? AND r.type = 'checked' AND p.user_id != ?`, userId, userId
-    ).c,
-    revisionsAsked: one(
+    ),
+    revisionsAsked: await count(
       `SELECT COUNT(DISTINCT r.proof_id) AS c FROM reviews r JOIN proofs p ON p.id = r.proof_id
        WHERE r.reviewer_id = ? AND r.type != 'checked' AND p.user_id != ?`, userId, userId
-    ).c,
+    ),
     streak: streaks(proofTimes, now),
   };
 }
 
 /** Group ranking: most verified work first, fewest confessions as tie-breaker. */
-export function groupLeaderboard(groupId, now = Date.now()) {
-  const members = all(
+export async function groupLeaderboard(groupId, now = Date.now()) {
+  const members = await all(
     `SELECT u.* FROM group_members gm JOIN users u ON u.id = gm.user_id WHERE gm.group_id = ?`,
     groupId
   );
-  return members
-    .map((u) => {
-      const missions = all('SELECT status FROM missions WHERE group_id = ? AND assignee_id = ?', groupId, u.id);
-      const proofTimes = all('SELECT created_at FROM proofs WHERE group_id = ? AND user_id = ?', groupId, u.id)
-        .map((r) => r.created_at);
-      return {
-        user: u,
-        ...summarize(missions),
-        confessions: one('SELECT COUNT(*) AS c FROM confessions WHERE group_id = ? AND user_id = ?', groupId, u.id).c,
-        streak: streaks(proofTimes, now).current,
-      };
-    })
-    .sort((a, b) => b.verified - a.verified || a.confessions - b.confessions || b.streak - a.streak);
+  const rows = await Promise.all(members.map(async (u) => {
+    const missions = await all('SELECT status FROM missions WHERE group_id = ? AND assignee_id = ?', groupId, u.id);
+    const proofTimes = (await all('SELECT created_at FROM proofs WHERE group_id = ? AND user_id = ?', groupId, u.id))
+      .map((r) => r.created_at);
+    return {
+      user: u,
+      ...summarize(missions),
+      confessions: (await one('SELECT COUNT(*) AS c FROM confessions WHERE group_id = ? AND user_id = ?', groupId, u.id)).c,
+      streak: streaks(proofTimes, now).current,
+    };
+  }));
+  return rows.sort((a, b) => b.verified - a.verified || a.confessions - b.confessions || b.streak - a.streak);
 }

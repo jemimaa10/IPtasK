@@ -7,17 +7,20 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "seed": "node server/seed.js",
     "test": "node --test",
-    "seed:beban": "node server/seed-beban.js"
+    "seed": "node server/seed.js",
+    "seed:beban": "node server/seed-beban.js",
+    "import:sqlite": "node server/import-sqlite.js"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.17",
     "bcryptjs": "^2.4.3",
     "express": "^4.22.3",
     "multer": "^2.5.0",
+    "pg": "^8.23.1",
     "socket.io": "^4.8.4"
   }
 }

@@ -1,11 +1,10 @@
 import { all, one } from './db.js';
+import { localDayNumber } from './time.js';
 
 const DAY = 24 * 3600_000;
 
-function dayKey(ts) {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
+// Calendar day in the app's time zone (the server may run in UTC).
+const dayKey = (ts) => localDayNumber(ts);
 
 /**
  * Streak = consecutive calendar days with at least one proof upload.

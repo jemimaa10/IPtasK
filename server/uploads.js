@@ -34,7 +34,8 @@ export const avatarUpload = multer({
 
 export const proofUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 6 },
+  // 4 MB: serverless hosts reject request bodies over ~4.5 MB. The app shrinks photos before uploading.
+  limits: { fileSize: 4 * 1024 * 1024, files: 6 },
   fileFilter: (_req, file, cb) =>
     cb(BLOCKED_EXT.test(file.originalname) ? rejected(`"${file.originalname}" is not an allowed file type.`) : null, true),
 });

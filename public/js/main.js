@@ -1,4 +1,4 @@
-import { api, bus, connectSocket, disconnectSocket } from './api.js';
+import { api, bus, connectLive, disconnectLive } from './api.js';
 import { store, app } from './state.js';
 import { $, $$, esc, avatar, colorFor, toast, openModal, confirmDialog, ICONS } from './ui.js';
 import { renderAuth } from './views/auth.js';
@@ -93,7 +93,7 @@ function openGroupSheet() {
 app.logout = async () => {
   if (!(await confirmDialog('Log out?', `You'll need your username and password${store.me ? ` for @${store.me.username}` : ''} to log back in.`, { confirmText: 'Log out', danger: true }))) return;
   await api('/auth/logout', { method: 'POST' });
-  disconnectSocket();
+  disconnectLive();
   store.me = null;
   announceAccount();
   location.hash = '#/login';
@@ -176,7 +176,7 @@ async function start() {
   $('#nav-new-group').onclick = () => openCreateGroup();
   $('#bn-create').onclick = () => openCreateGroup();
   $('#bn-groups').onclick = openGroupSheet;
-  connectSocket();
+  connectLive();
   await Promise.all([app.refreshGroups(), app.refreshUnread()]);
   route();
 }
@@ -191,7 +191,7 @@ function announceAccount() {
 }
 function followAccount(id) {
   if (id === String(store.me?.id ?? '')) return;
-  disconnectSocket(); // the socket still belongs to the old account
+  disconnectLive(); // the live updates still belong to the old account
   start().then(() => toast(id ? 'You logged in with another account in a different tab, so this tab switched too.' : 'You logged out in another tab.'));
 }
 window.addEventListener('storage', (e) => {

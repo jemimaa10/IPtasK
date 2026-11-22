@@ -2,6 +2,7 @@ import { api, bus } from '../api.js';
 import { store } from '../state.js';
 import { $, $$, esc, avatar, timeAgo, fmtDate, fmtSize, countdown, statusPill, openModal, confirmDialog, toast, busy } from '../ui.js';
 import { confessionTweetHtml, downloadConfession } from './confession.js';
+import { prepareUploads } from '../shrink.js';
 
 /** The uploader can't review their own proof, so tell them who still has to. */
 function ownerWaitingHtml(p, end) {
@@ -35,7 +36,7 @@ export function openUploadModal(ctx, missions, preselectId, onDone) {
         <label>Caption <small>(optional)</small></label>
         <textarea class="input" name="caption" maxlength="1000" placeholder="What did you finish? Anything reviewers should know?"></textarea>
       </div>
-      <div class="dropzone" id="up-drop">📎 Drop files here or <b style="color:var(--accent)">browse</b><br><small>Images, PDF, docs, zip… up to 6 files, 15 MB each</small></div>
+      <div class="dropzone" id="up-drop">📎 Drop files here or <b style="color:var(--accent)">browse</b><br><small>Images, PDF, docs, zip… up to 6 files, 4 MB in total (big photos are shrunk for you)</small></div>
       <input type="file" id="up-input" multiple hidden>
       <div class="picked" id="up-picked"></div>
       <div class="form-error"></div>
@@ -85,8 +86,13 @@ export function openUploadModal(ctx, missions, preselectId, onDone) {
       return;
     }
     busy(form.querySelector('[type=submit]'), async () => {
+      const ready = await prepareUploads(files);
+      if (ready.error) {
+        err.textContent = ready.error;
+        return;
+      }
       const fd = new FormData();
-      files.forEach((f) => fd.append('files', f));
+      ready.files.forEach((f) => fd.append('files', f));
       fd.append('caption', form.caption.value);
       try {
         await api(`/missions/${form.mission.value}/proofs`, { method: 'POST', form: fd });

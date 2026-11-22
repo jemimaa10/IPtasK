@@ -118,13 +118,15 @@ router.patch('/groups/:groupId', loadGroup(true), async (req, res) => {
     name, String(req.body.description ?? req.group.description).trim().slice(0, 300), grace,
     parseReminderDays(req.body.reminderEveryDays, req.group.reminder_every_days), req.group.id
   );
-  emitToGroup(req.group.id, 'group:changed');
+  await emitToGroup(req.group.id, 'group:changed');
   res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
 });
 
 router.delete('/groups/:groupId', loadGroup(true), async (req, res) => {
-  emitToGroup(req.group.id, 'group:deleted', { groupId: req.group.id });
+  // Sent to each member directly: once the group is gone, nobody is a member any more.
+  const members = await all('SELECT user_id FROM group_members WHERE group_id = ?', req.group.id);
   await run('DELETE FROM groups WHERE id = ?', req.group.id);
+  for (const m of members) await emitToUser(m.user_id, 'group:deleted', { groupId: req.group.id });
   res.json({ ok: true });
 });
 
@@ -148,7 +150,7 @@ router.post('/groups/:groupId/invites', loadGroup(true), async (req, res) => {
     link: '#/home',
     actorId: req.user.id,
   });
-  emitToUser(invitee.id, 'invites:changed');
+  await emitToUser(invitee.id, 'invites:changed');
   res.json({ ok: true });
 });
 
@@ -156,7 +158,7 @@ router.delete('/groups/:groupId/invites/:inviteId', loadGroup(true), async (req,
   const invite = await one('SELECT * FROM invites WHERE id = ? AND group_id = ?', Number(req.params.inviteId), req.group.id);
   if (invite) {
     await run('DELETE FROM invites WHERE id = ?', invite.id);
-    emitToUser(invite.invitee_id, 'invites:changed');
+    await emitToUser(invite.invitee_id, 'invites:changed');
   }
   res.json({ ok: true });
 });
@@ -205,7 +207,7 @@ router.post('/invites/:id/:action(accept|decline)', async (req, res) => {
     actorId: req.user.id,
   });
   if (accepted) {
-    emitToGroup(group.id, 'group:changed');
+    await emitToGroup(group.id, 'group:changed');
     // A new reviewer joined: in-progress proofs now need their check too.
     await refreshOpenMissions(group.id);
   }
@@ -235,9 +237,9 @@ router.delete('/groups/:groupId/members/:userId', loadGroup(), async (req, res) 
   if (!isSelf) {
     await notify(targetId, { type: 'removed', title: `You were removed from "${req.group.name}"`, link: '#/home' });
   }
-  emitToGroup(req.group.id, 'group:changed');
-  emitToGroup(req.group.id, 'missions:changed');
-  emitToUser(targetId, 'group:deleted', { groupId: req.group.id });
+  await emitToGroup(req.group.id, 'group:changed');
+  await emitToGroup(req.group.id, 'missions:changed');
+  await emitToUser(targetId, 'group:deleted', { groupId: req.group.id });
   res.json({ ok: true });
 });
 
@@ -257,7 +259,7 @@ router.post('/groups/:groupId/transfer', loadGroup(true), async (req, res) => {
     link: `#/group/${req.group.id}/members`,
     actorId: req.user.id,
   });
-  emitToGroup(req.group.id, 'group:changed');
+  await emitToGroup(req.group.id, 'group:changed');
   res.json({ ok: true });
 });
 
@@ -325,7 +327,7 @@ router.post('/groups/:groupId/messages', loadGroup(), async (req, res) => {
   const createdAt = Date.now();
   const info = await run('INSERT INTO messages (group_id, user_id, body, created_at) VALUES (?, ?, ?, ?)', req.group.id, req.user.id, body, createdAt);
   const message = { id: Number(info.lastInsertRowid), body, createdAt, user: await getUser(req.user.id), groupId: req.group.id };
-  emitToGroup(req.group.id, 'message', message);
+  await emitToGroup(req.group.id, 'message', message);
   res.json({ message });
 });
 

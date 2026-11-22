@@ -39,7 +39,7 @@ npm run import:sqlite  # one-time: copy the old SQLite data/iptask.db (+ uploads
 | Verification window closes, a revision was never fixed | Owner gets *"this user didn't fix the revision before the deadline"* |
 | 12h before the window closes | Reminder to reviewers who haven't acted |
 
-The scheduler runs every minute inside the server process (`server/missions.js`).
+The scheduler (`server/missions.js`) runs every minute inside `npm start`; on Vercel an outside cron calls `/api/cron/tick` (see Deploying).
 
 ## Accounts & security
 
@@ -72,7 +72,10 @@ The scheduler runs every minute inside the server process (`server/missions.js`)
 
 ```
 server/
-  index.js         Express + Socket.IO bootstrap
+  app.js           the Express app (routes, static files, cron endpoint)
+  index.js         local server: npm start (app + scheduler every minute)
+  realtime.js      live updates: events table, read by long polling (routes/events.js)
+  time.js          calendar days and dates in APP_TIMEZONE
   db.js            Postgres (pg or PGlite), async query helpers, schema + numbered migrations
   uploads.js       avatar/proof storage: uploads/ folder or Supabase Storage
   router.js        express.Router whose handlers may be async
@@ -83,6 +86,8 @@ server/
   missions.js      mission status, confessions, scheduler
   gemini.js        Gemini REST calls
   routes/          account, groups (chat, invites, AI split), missions (proofs, reviews, feed)
+api/
+  index.js         Vercel serverless entry (same app)
 public/
   index.html       landing page
   app.html         single-page app (vanilla JS modules in js/)
@@ -94,24 +99,39 @@ test/              node:test suites
 
 Add an async function to the end of `MIGRATIONS` in `server/db.js` (for example `() => exec('ALTER TABLE …')`). It runs once on the next start and bumps the `schema_version` table. Never edit or reorder a migration that has already shipped. Queries use `?` placeholders and are all async: `await one(…)`, `await all(…)`, `await run(…)`, `await tx(async () => …)`.
 
-## Deploying for free: Render + Supabase
+## Deploying for free: Vercel + Supabase
 
-Supabase holds the data (Postgres) and the files (Storage); Render runs the server. Both have free plans without a credit card.
+Supabase holds the data (Postgres) and the files (Storage); Vercel runs the app. Both have free plans without a credit card.
 
-**1. Supabase** (supabase.com → New project, region Singapore)
-- *Connect* → **Session pooler** → copy the URI and put your database password in it → `DATABASE_URL`.
+**1. Supabase** (supabase.com → New project, region Singapore; untick *Enable Data API*, the app talks to Postgres directly)
+- *Connect* → *Direct* → method **Transaction pooler** (port 6543) → copy the URI and put your database password in it → `DATABASE_URL`. Serverless functions open many short connections; the transaction pooler is made for that. (The session pooler, port 5432, is fine for `npm start` on a laptop or a VPS.)
 - *Project Settings → API Keys* → the **secret** key (or legacy `service_role`) → `SUPABASE_SERVICE_KEY`; the project URL `https://<ref>.supabase.co` → `SUPABASE_URL`. Keep the secret key on the server only.
 - The app creates its tables and a private `iptask` storage bucket on first start.
 
-**2. Move existing data (optional)** from your laptop: put the three values in `.env`, then `npm run import:sqlite`. It copies `data/iptask.db` and `uploads/` into Supabase (the target must be empty). Remove them from `.env` afterwards if you want local development to use the local database again.
+**2. Move existing data (optional)** from your laptop: put the three values in `.env`, then `npm run import:sqlite`. It copies `data/iptask.db` and `uploads/` into Supabase (the target must be empty).
 
-**3. Render** (render.com → New → **Blueprint** → this GitHub repo). `render.yaml` sets everything up; fill in `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and optionally `GEMINI_API_KEY`. The app runs at `https://<name>.onrender.com`.
+**3. Vercel** (vercel.com → Add New → Project → import this GitHub repo; Application Preset *Other*, nothing else to change: `vercel.json` sets the rest). Environment variables:
 
-**4. Keep it awake**: the free Render plan sleeps after 15 minutes without visits (the first visit then takes ~1 minute, and reminders wait). Create a free job on cron-job.org that opens `https://<name>.onrender.com/healthz` every 10 minutes. That also keeps the Supabase project active (free projects pause after a week without use).
+| Name | Value |
+|---|---|
+| `DATABASE_URL` | transaction pooler URI from step 1 |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | from step 1 |
+| `CRON_SECRET` | any long random string (see step 4) |
+| `GEMINI_API_KEY` | optional |
 
-**5. Google sign-in (optional)**: add `https://<name>.onrender.com/api/auth/google/callback` to the OAuth client's redirect URIs and set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `PUBLIC_URL=https://<name>.onrender.com` on Render.
+The app runs at `https://<project>.vercel.app`. Every push to `main` deploys again.
 
-Other hosts work the same way: a long-lived Node 22.13+ process (the scheduler and Socket.IO need it to stay up, so not serverless), `NODE_ENV=production`, HTTPS in front (Socket.IO needs WebSocket upgrade allowed), and **one** instance only (login limits and the scheduler live in memory).
+**4. Scheduler**: serverless functions only run when called, so reminders, deadlines and confessions are run by `GET /api/cron/tick`. Vercel calls it once a day (`crons` in `vercel.json`, free plan limit); for minute-level timing create a free job on cron-job.org that opens `https://<project>.vercel.app/api/cron/tick?key=<CRON_SECRET>` every 5 minutes. It also keeps the Supabase project active (free projects pause after a week without use).
+
+**5. Google sign-in (optional)**: add `https://<project>.vercel.app/api/auth/google/callback` to the OAuth client's redirect URIs and set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `PUBLIC_URL=https://<project>.vercel.app` on Vercel.
+
+How it fits serverless:
+- **Live updates** (chat, feed, notifications) use long polling: open pages call `GET /api/events`, which answers as soon as something happens (checked every 1.5 s) or after 20 s. Events are rows in the `events` table, deleted after a day.
+- **Uploads**: Vercel rejects request bodies over ~4.5 MB, so proofs are limited to 4 MB per upload; the app shrinks big photos (to 1920 px JPEG) before sending.
+- **Time zone**: reminders ("every 2 days"), streaks and dates in notifications use `APP_TIMEZONE` (default `Asia/Jakarta`), not the server's clock, which is UTC on Vercel.
+- AI hints and roast captions finish after the response through `waitUntil` (`server/background.js`).
+
+Any always-on Node 22.13+ host works too (`npm start`: it serves the same app and runs the scheduler every minute itself). Run one instance only: login limits live in memory.
 
 ### Backups
 

@@ -1,47 +1,20 @@
-import { Server } from 'socket.io';
-import { userFromCookieHeader } from './auth.js';
-import { one, run } from './db.js';
+// Live updates for open pages. Events are rows in the `events` table; each open page long-polls
+// GET /api/events (see routes/events.js). Works on serverless hosts, where a socket cannot stay open.
+//
+//   emitToUser(userId, type, payload)    → that user's open pages
+//   emitToGroup(groupId, type, payload)  → pages that currently show that group
+import { one, all, run } from './db.js';
 
-let io = null;
+export const EVENT_TYPES = ['notification', 'message', 'feed:changed', 'missions:changed', 'group:changed', 'group:deleted', 'invites:changed'];
 
-export function initRealtime(httpServer) {
-  io = new Server(httpServer);
-
-  io.use((socket, next) => {
-    userFromCookieHeader(socket.handshake.headers.cookie)
-      .then((user) => {
-        if (!user) return next(new Error('unauthorized'));
-        socket.data.userId = user.id;
-        next();
-      })
-      .catch(next);
-  });
-
-  io.on('connection', (socket) => {
-    socket.join(`user:${socket.data.userId}`);
-
-    socket.on('group:join', async (groupId) => {
-      try {
-        const member = await one(
-          'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?',
-          Number(groupId), socket.data.userId
-        );
-        if (member) socket.join(`group:${Number(groupId)}`);
-      } catch (err) {
-        console.error('[socket] group:join', err.message);
-      }
-    });
-
-    socket.on('group:leave', (groupId) => socket.leave(`group:${Number(groupId)}`));
-  });
+export async function emitToUser(userId, type, payload = {}) {
+  await run('INSERT INTO events (user_id, type, payload, created_at) VALUES (?, ?, ?, ?) RETURNING id',
+    userId, type, JSON.stringify(payload), Date.now());
 }
 
-export function emitToUser(userId, event, payload = {}) {
-  io?.to(`user:${userId}`).emit(event, payload);
-}
-
-export function emitToGroup(groupId, event, payload = {}) {
-  io?.to(`group:${groupId}`).emit(event, payload);
+export async function emitToGroup(groupId, type, payload = {}) {
+  await run('INSERT INTO events (group_id, type, payload, created_at) VALUES (?, ?, ?, ?) RETURNING id',
+    groupId, type, JSON.stringify({ ...payload, groupId }), Date.now());
 }
 
 export async function notify(userId, { type, title, body = '', link = null, actorId = null }) {
@@ -50,5 +23,31 @@ export async function notify(userId, { type, title, body = '', link = null, acto
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     userId, type, title, body, link, actorId, Date.now()
   );
-  emitToUser(userId, 'notification', { id: Number(info.lastInsertRowid), type, title, body, link });
+  await emitToUser(userId, 'notification', { id: Number(info.lastInsertRowid), type, title, body, link });
+}
+
+/** Newest event id, where a page that just opened starts listening. */
+export async function latestEventId() {
+  return (await one('SELECT MAX(id) AS id FROM events'))?.id ?? 0;
+}
+
+/** Events after `since` for this user and for those of `groupIds` the user is a member of. */
+export async function eventsSince(userId, since, groupIds = []) {
+  const mine = groupIds.length
+    ? (await all(
+        `SELECT group_id FROM group_members WHERE user_id = ? AND group_id IN (${groupIds.map(() => '?').join(',')})`,
+        userId, ...groupIds
+      )).map((r) => r.group_id)
+    : [];
+  const groupClause = mine.length ? ` OR group_id IN (${mine.map(() => '?').join(',')})` : '';
+  const rows = await all(
+    `SELECT id, type, payload FROM events WHERE id > ? AND (user_id = ?${groupClause}) ORDER BY id LIMIT 100`,
+    since, userId, ...mine
+  );
+  return rows.map((r) => ({ id: r.id, type: r.type, payload: JSON.parse(r.payload) }));
+}
+
+/** Housekeeping: pages that were closed for more than a day reload everything anyway. */
+export async function pruneEvents(now = Date.now()) {
+  await run('DELETE FROM events WHERE created_at < ?', now - 24 * 3600_000);
 }

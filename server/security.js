@@ -37,7 +37,7 @@ export function tooManyAttempts(res, ms) {
   return res.status(429).json({ error: `Too many attempts. Try again in ${minutes} minute${minutes > 1 ? 's' : ''}.` });
 }
 
-const CSP = [
+export const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   // Views build markup with inline style attributes.
@@ -45,7 +45,7 @@ const CSP = [
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
-  "connect-src 'self' ws: wss:",
+  "connect-src 'self'",
   "frame-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",

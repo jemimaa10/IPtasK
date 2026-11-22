@@ -33,7 +33,7 @@ export async function labelForMissedMission(mission) {
     body: `Everyone can see it on your profile. Ask your group for a redeem vote to remove it.`,
     link: '#/profile',
   });
-  emitToGroup(group.id, 'group:changed');
+  await emitToGroup(group.id, 'group:changed');
   return labelText(group.name);
 }
 
@@ -98,8 +98,8 @@ export async function evaluateRedeem(requestId) {
       link: `#/group/${label.group_id}/members`,
     });
   }
-  emitToGroup(label.group_id, 'group:changed');
-  emitToUser(label.user_id, 'group:changed');
+  await emitToGroup(label.group_id, 'group:changed');
+  await emitToUser(label.user_id, 'group:changed');
   return status;
 }
 
@@ -141,7 +141,7 @@ export async function requestRedeem(labelId, userId, message) {
   }
   // Nobody else in the group → nothing to wait for.
   const status = await evaluateRedeem(requestId);
-  emitToGroup(label.group_id, 'group:changed');
+  await emitToGroup(label.group_id, 'group:changed');
   return { requestId, status };
 }
 
@@ -160,7 +160,7 @@ export async function castVote(requestId, voterId, approve) {
     request.id, voterId, approve ? 1 : 0, Date.now()
   );
   const status = await evaluateRedeem(request.id);
-  emitToGroup(label.group_id, 'group:changed');
+  await emitToGroup(label.group_id, 'group:changed');
   return { status };
 }
 

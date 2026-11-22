@@ -34,5 +34,7 @@ export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 // Public address of the app, e.g. https://iptask.example.com. Used for the Google redirect URI; defaults to the request's host.
 export const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+// Secret for GET /api/cron/tick (serverless hosts call the scheduler from outside). Any long random string.
+export const CRON_SECRET = process.env.CRON_SECRET || '';
 export const SESSION_DAYS = 30;
 export const SCHEDULER_INTERVAL_MS = 60_000;

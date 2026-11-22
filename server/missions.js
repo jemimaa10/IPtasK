@@ -2,6 +2,8 @@ import { one, all, run, localDayNumber } from './db.js';
 import { notify, emitToGroup } from './realtime.js';
 import { roastLine } from './gemini.js';
 import { labelForMissedMission } from './labels.js';
+import { background } from './background.js';
+import { pruneEvents } from './realtime.js';
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -61,7 +63,7 @@ export async function refreshMissionStatus(missionId) {
         link: `#/group/${mission.group_id}/feed`,
       });
     }
-    emitToGroup(mission.group_id, 'missions:changed');
+    await emitToGroup(mission.group_id, 'missions:changed');
   }
   return { ...mission, status };
 }
@@ -95,15 +97,16 @@ export async function postConfession({ mission, userId, kind, targetUserId = nul
       actorId: userId,
     });
   }
-  emitToGroup(mission.group_id, 'feed:changed');
+  await emitToGroup(mission.group_id, 'feed:changed');
 
   // The witty line is a bonus; post first, decorate when Gemini answers.
-  roastLine({ kind, displayName: user.display_name, missionTitle: mission.title })
-    .then(async (roast) => {
+  background(
+    roastLine({ kind, displayName: user.display_name, missionTitle: mission.title }).then(async (roast) => {
       await run('UPDATE confessions SET roast = ? WHERE id = ?', roast, confessionId);
-      emitToGroup(mission.group_id, 'feed:changed');
-    })
-    .catch((err) => console.error('[roast]', err.message));
+      await emitToGroup(mission.group_id, 'feed:changed');
+    }),
+    'roast'
+  );
 }
 
 function timeLeftText(ms) {
@@ -145,7 +148,7 @@ export async function runScheduler() {
         continue;
       }
       await run("UPDATE missions SET status = 'failed' WHERE id = ?", m.id);
-      emitToGroup(m.group_id, 'missions:changed');
+      await emitToGroup(m.group_id, 'missions:changed');
       await labelForMissedMission(m);
       await postConfession({ mission: m, userId: m.assignee_id, kind: 'missed_deadline' });
     }
@@ -166,7 +169,7 @@ export async function runScheduler() {
       const revisionOpen = [...states.values()].some((s) => s.state === 'revision');
 
       await run("UPDATE missions SET status = 'unverified' WHERE id = ?", m.id);
-      emitToGroup(m.group_id, 'missions:changed');
+      await emitToGroup(m.group_id, 'missions:changed');
 
       for (const reviewerId of pending) {
         await postConfession({ mission: m, userId: reviewerId, kind: 'unchecked', targetUserId: m.assignee_id });
@@ -219,8 +222,9 @@ export async function runScheduler() {
       }
     }
 
-    // Housekeeping: expired sessions.
+    // Housekeeping: expired sessions, old live-update events.
     await run('DELETE FROM sessions WHERE expires_at <= ?', now);
+    await pruneEvents(now);
 
     // 5. Reminder for every unfinished jobdesk, at the mission's frequency (or the group's default).
     const today = localDayNumber(now);

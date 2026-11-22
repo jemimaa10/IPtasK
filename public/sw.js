@@ -1,6 +1,6 @@
 // IPtasK service worker: makes the app installable, keeps the shell available offline,
 // and opens the right screen when a notification is clicked.
-const CACHE = 'iptask-v2';
+const CACHE = 'iptask-v3';
 const SHELL = ['/app', '/css/base.css', '/css/app.css', '/favicon.svg', '/icon.svg', '/manifest.webmanifest', '/brand/mascot.svg', '/brand/mascot-dark.svg'];
 
 self.addEventListener('install', (event) => {
@@ -20,7 +20,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== location.origin) return;
   // Live data and private files always go to the network.
-  if (/^\/(api|socket\.io|uploads)\//.test(url.pathname)) return;
+  if (/^\/(api|uploads)\//.test(url.pathname)) return;
 
   // Network first, so a deploy shows up on the next load; cache is the offline fallback.
   event.respondWith(

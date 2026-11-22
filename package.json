@@ -17,10 +17,10 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.17",
+    "@vercel/functions": "^3.11.3",
     "bcryptjs": "^2.4.3",
     "express": "^4.22.3",
     "multer": "^2.5.0",
-    "pg": "^8.23.1",
-    "socket.io": "^4.8.4"
+    "pg": "^8.23.1"
   }
 }

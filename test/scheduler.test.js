@@ -55,9 +55,10 @@ beforeEach(async () => {
 });
 
 test('schema is in place: version, columns, case-insensitive usernames', async () => {
-  assert.equal(await schemaVersion(), 0);
+  assert.equal(await schemaVersion(), 1);
   const cols = async (t) =>
     (await all('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', t)).map((c) => c.column_name);
+  assert.ok((await cols('events')).includes('payload'));
   assert.ok((await cols('users')).includes('recovery_hash'));
   assert.ok((await cols('users')).includes('google_sub'));
   assert.ok((await cols('groups')).includes('reminder_every_days'));
@@ -241,6 +242,44 @@ test('expired sessions are cleaned up', async () => {
   await run('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)', 'new', alice, Date.now() + DAY);
   await runScheduler();
   assert.deepEqual((await all('SELECT token FROM sessions')).map((s) => s.token), ['new']);
+});
+
+test('live updates: users get their own events and those of groups they belong to', async () => {
+  const { emitToUser, emitToGroup, eventsSince, latestEventId, pruneEvents } = await import('../server/realtime.js');
+  await exec('DELETE FROM events');
+  const start = await latestEventId();
+  await emitToUser(alice, 'notification', { title: 'hi' });
+  await emitToGroup(groupId, 'message', { body: 'yo' });
+  await emitToUser(bob, 'notification', { title: 'not for alice' });
+  const g2 = Number((await run('INSERT INTO groups (name, leader_id, created_at) VALUES (?, ?, ?)', 'Other', bob, Date.now())).lastInsertRowid);
+  await emitToGroup(g2, 'feed:changed');
+
+  const forAlice = await eventsSince(alice, start, [groupId, g2]); // asks for g2 but is not a member
+  assert.deepEqual(forAlice.map((e) => e.type), ['notification', 'message']);
+  assert.equal(forAlice[1].payload.groupId, groupId);
+  assert.deepEqual((await eventsSince(alice, start)).map((e) => e.type), ['notification']); // no group open
+  assert.equal((await eventsSince(alice, forAlice.at(-1).id, [groupId])).length, 0);
+
+  await run('UPDATE events SET created_at = ?', Date.now() - 2 * DAY);
+  await pruneEvents();
+  assert.equal((await one('SELECT COUNT(*) AS c FROM events')).c, 0);
+});
+
+test('calendar days and dates follow Asia/Jakarta, whatever the server time zone', async () => {
+  const { tzOffsetMs, formatDateTime } = await import('../server/time.js');
+  const lateNightWib = Date.UTC(2026, 10, 21, 16, 59); // 23:59 WIB
+  const justAfterMidnight = Date.UTC(2026, 10, 21, 17, 1); // 00:01 WIB next day
+  assert.equal(tzOffsetMs(lateNightWib), 7 * HOUR);
+  assert.equal(localDayNumber(justAfterMidnight) - localDayNumber(lateNightWib), 1);
+  assert.equal(formatDateTime(lateNightWib), '21 Nov 2026, 23:59');
+});
+
+test('vercel.json sends the same security policy as the Express app', async () => {
+  const fs = await import('node:fs');
+  const { CSP } = await import('../server/security.js');
+  const config = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const headers = config.headers.find((h) => h.source === '/(.*)').headers;
+  assert.equal(headers.find((h) => h.key === 'Content-Security-Policy').value, CSP);
 });
 
 test('streaks count consecutive days and survive a not-yet-done today', () => {

@@ -5,6 +5,8 @@ import { one, all, run, tx } from '../db.js';
 import { getUser, requireAuth } from '../auth.js';
 import { notify, emitToGroup } from '../realtime.js';
 import { precheckProof } from '../gemini.js';
+import { background } from '../background.js';
+import { formatDateTime } from '../time.js';
 import { proofUpload, saveUploads, removeFile, sendStoredFile, PROOFS } from '../uploads.js';
 import { loadGroup, membership } from './groups.js';
 import {
@@ -88,12 +90,12 @@ async function insertMissions(group, creator, items) {
       title: list.length === 1
         ? `New jobdesk: "${first.title}"`
         : `${list.length} new jobdesks assigned to you`,
-      body: `From ${creator.display_name} in "${group.name}". First deadline: ${new Date(first.deadline).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`,
+      body: `From ${creator.display_name} in "${group.name}". First deadline: ${formatDateTime(first.deadline)}`,
       link: `#/group/${group.id}/missions`,
       actorId: creator.id,
     });
   }
-  emitToGroup(group.id, 'missions:changed');
+  await emitToGroup(group.id, 'missions:changed');
   return ids;
 }
 
@@ -189,13 +191,13 @@ router.patch('/missions/:missionId', async (req, res) => {
     await notify(mission.assignee_id, {
       type: 'mission',
       title: `Deadline changed: "${input.title}"`,
-      body: `New deadline: ${new Date(input.deadline).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`,
+      body: `New deadline: ${formatDateTime(input.deadline)}`,
       link: `#/group/${group.id}/missions`,
       actorId: req.user.id,
     });
   }
-  emitToGroup(group.id, 'missions:changed');
-  emitToGroup(group.id, 'feed:changed');
+  await emitToGroup(group.id, 'missions:changed');
+  await emitToGroup(group.id, 'feed:changed');
   res.json({ mission: await missionView(await one('SELECT * FROM missions WHERE id = ?', mission.id), group) });
 });
 
@@ -209,8 +211,8 @@ router.delete('/missions/:missionId', async (req, res) => {
   );
   await run('DELETE FROM missions WHERE id = ?', mission.id);
   files.forEach((f) => removeFile(PROOFS, f.stored_name));
-  emitToGroup(group.id, 'missions:changed');
-  emitToGroup(group.id, 'feed:changed');
+  await emitToGroup(group.id, 'missions:changed');
+  await emitToGroup(group.id, 'feed:changed');
   res.json({ ok: true });
 });
 
@@ -288,27 +290,29 @@ router.post('/missions/:missionId/proofs', proofUpload.array('files', 6), async 
     await notify(reviewerId, {
       type: 'proof',
       title: `${req.user.display_name} ${isResubmit ? 're-uploaded' : 'uploaded'} proof for "${mission.title}"`,
-      body: `Give it a Checked or Revision before ${new Date(graceEnd(mission, group)).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+      body: `Give it a Checked or Revision before ${formatDateTime(graceEnd(mission, group))}.`,
       link: `#/group/${group.id}/feed`,
       actorId: req.user.id,
     });
   }
-  emitToGroup(group.id, 'feed:changed');
-  emitToGroup(group.id, 'missions:changed');
+  await emitToGroup(group.id, 'feed:changed');
+  await emitToGroup(group.id, 'missions:changed');
   res.json({ proofId });
 
-  // Non-blocking AI hint for reviewers.
+  // AI hint for reviewers, after the response (it can take a few seconds).
   const images = files
     .filter((f) => /^image\/(png|jpe?g|webp)$/.test(f.mimetype) && f.size <= 4 * 1024 * 1024)
     .slice(0, 3)
     .map((f) => ({ mime: f.mimetype, base64: f.buffer.toString('base64') }));
-  const note = await precheckProof({
-    missionTitle: mission.title, missionDescription: mission.description, caption, images,
-  });
-  if (note) {
-    await run('UPDATE proofs SET ai_note = ? WHERE id = ?', note, proofId);
-    emitToGroup(group.id, 'feed:changed');
-  }
+  background((async () => {
+    const note = await precheckProof({
+      missionTitle: mission.title, missionDescription: mission.description, caption, images,
+    });
+    if (note) {
+      await run('UPDATE proofs SET ai_note = ? WHERE id = ?', note, proofId);
+      await emitToGroup(group.id, 'feed:changed');
+    }
+  })(), 'ai hint');
 });
 
 router.post('/proofs/:proofId/review', async (req, res) => {
@@ -350,8 +354,8 @@ router.post('/proofs/:proofId/review', async (req, res) => {
         actorId: req.user.id,
       });
   await refreshMissionStatus(mission.id);
-  emitToGroup(group.id, 'feed:changed');
-  emitToGroup(group.id, 'missions:changed');
+  await emitToGroup(group.id, 'feed:changed');
+  await emitToGroup(group.id, 'missions:changed');
   res.json({ ok: true });
 });
 

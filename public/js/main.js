@@ -96,8 +96,8 @@ app.logout = async () => {
   disconnectLive();
   store.me = null;
   announceAccount();
-  location.hash = '#/login';
-  start();
+  // Back to the landing page; its Log in / Get started buttons lead into the app again.
+  location.replace('/');
 };
 
 app.refreshGroups = async () => {
@@ -157,6 +157,22 @@ function route() {
   cleanup = renderers[r.name](view, r) || null;
 }
 
+// The installed app (APK / home-screen icon) opens /app#/home. The very first time on a device, someone
+// who is not logged in sees the landing page first; its Log in / Get started buttons come back here.
+// Afterwards the app opens straight on the login screen (or Home once logged in).
+const INTRO_KEY = 'iptask-intro-seen';
+function showLandingFirst() {
+  let seen = true;
+  try {
+    seen = localStorage.getItem(INTRO_KEY) === '1';
+    localStorage.setItem(INTRO_KEY, '1');
+  } catch { /* storage blocked: never redirect, or it would loop */ }
+  const explicit = ['login', 'register', 'recover'].includes(location.hash.replace(/^#\//, '').split('/')[0]);
+  if (seen || explicit) return false;
+  location.replace('/');
+  return true;
+}
+
 async function start() {
   cleanup?.();
   cleanup = null;
@@ -168,6 +184,7 @@ async function start() {
   }
   announceAccount();
   if (!store.me) {
+    if (showLandingFirst()) return;
     const r = parseRoute();
     renderAuth(root, ['register', 'recover'].includes(r.name) ? r.name : 'login');
     return;

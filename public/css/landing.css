@@ -143,6 +143,11 @@ footer .wrap { display: flex; justify-content: space-between; align-items: cente
   .hero { padding-top: 48px; }
   .mock-notif { left: 0; }
   .mock-quote { right: 0; width: 88%; }
-  .l-nav .cta .btn-ghost { display: none; }
+  /* Keep "Log in" on phones: the installed app opens here first, and existing members need it. */
+  .l-nav .wrap { gap: 12px; }
+  .l-nav .cta { gap: 6px; }
+  .l-nav .cta .btn { padding: 8px 12px; font-size: 13px; }
+  .l-nav .brand-mark { width: 36px; height: 30px; }
+  .l-nav .brand-name { font-size: 18px; }
   section.block { padding: 72px 0; }
 }

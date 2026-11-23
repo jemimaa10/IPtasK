@@ -1,8 +1,6 @@
 import { api } from '../api.js';
 import { store, app } from '../state.js';
-import { $, $$, esc, avatar, groupDot, confirmDialog, toast, busy, reminderSelect } from '../ui.js';
-import { cropAvatar } from '../cropper.js';
-import { shrinkImage } from '../shrink.js';
+import { $, $$, esc, avatar, confirmDialog, toast, busy, reminderSelect } from '../ui.js';
 import { labelCard, labelChips, bindLabelActions } from './labels.js';
 
 function leaderboardHtml(rows) {
@@ -70,28 +68,6 @@ export function renderMembers(container, ctx) {
         .join('')}</div>
     </div>
     ${ctx.isLeader ? `
-    <div class="section">
-      <h2 class="section-title">Group photo &amp; banner</h2>
-      <div class="card group-look">
-        <div class="group-look-row">
-          ${groupDot(g, 64)}
-          <div class="grow"><b>Group photo</b><small>Shown next to the group name everywhere. Optional.</small></div>
-          <div class="group-look-actions">
-            <button type="button" class="btn btn-sm" id="gl-photo">${g.avatarUrl ? 'Change' : 'Upload'}</button>
-            ${g.avatarUrl ? '<button type="button" class="btn btn-sm btn-ghost" id="gl-photo-rm">Remove</button>' : ''}
-          </div>
-        </div>
-        <div class="group-look-banner" style="${g.bannerUrl ? `background-image:url('${esc(g.bannerUrl)}')` : ''}">${g.bannerUrl ? '' : '<span>No banner yet</span>'}</div>
-        <div class="group-look-row">
-          <div class="grow"><b>Banner</b><small>A wide photo behind the group name and tabs, for example a picture of your team. Optional.</small></div>
-          <div class="group-look-actions">
-            <button type="button" class="btn btn-sm" id="gl-banner">${g.bannerUrl ? 'Change' : 'Upload'}</button>
-            ${g.bannerUrl ? '<button type="button" class="btn btn-sm btn-ghost" id="gl-banner-rm">Remove</button>' : ''}
-          </div>
-        </div>
-        <input type="file" id="gl-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
-      </div>
-    </div>
     <div class="section">
       <h2 class="section-title">Group settings</h2>
       <form class="card" id="set-form">
@@ -182,65 +158,6 @@ export function renderMembers(container, ctx) {
         }
       });
     });
-  }
-
-  // Group photo (cropped square, like a profile photo) and banner (shrunk wide photo).
-  const look = $('#gl-file', container);
-  if (look) {
-    let target = 'avatar';
-    const after = async (msg) => {
-      await ctx.reload();
-      app.refreshGroups();
-      renderMembers(container, ctx);
-      toast(msg);
-    };
-    const pick = (kind) => () => {
-      target = kind;
-      look.click();
-    };
-    $('#gl-photo', container).onclick = pick('avatar');
-    $('#gl-banner', container).onclick = pick('banner');
-    look.onchange = async () => {
-      const picked = look.files[0];
-      look.value = '';
-      if (!picked) return;
-      if (!/^image\/(png|jpe?g|webp|gif)$/.test(picked.type)) return toast('Choose a PNG, JPG, WEBP or GIF image.', { error: true });
-      if (picked.size > 25 * 1024 * 1024) return toast('That image is too large (max 25 MB).', { error: true });
-      let blob;
-      try {
-        blob = target === 'avatar' ? await cropAvatar(picked, { name: ctx.group.name, group: true }) : await shrinkImage(picked);
-      } catch (ex) {
-        return toast(ex.message, { error: true });
-      }
-      if (!blob) return; // crop cancelled
-      if (blob.size > 4 * 1024 * 1024) return toast('That image is larger than 4 MB. Choose a smaller one.', { error: true });
-      const fd = new FormData();
-      fd.append(target, blob, blob.name || 'group.jpg'); // cropped photos are JPEG Blobs without a name
-      busy($(target === 'avatar' ? '#gl-photo' : '#gl-banner', container), async () => {
-        try {
-          await api(`/groups/${ctx.groupId}/${target}`, { method: 'POST', form: fd });
-          await after(target === 'avatar' ? 'Group photo updated' : 'Banner updated');
-        } catch (ex) {
-          toast(ex.message, { error: true });
-        }
-      });
-    };
-    for (const [id, kind, title, msg] of [
-      ['#gl-photo-rm', 'avatar', 'Remove the group photo?', 'The coloured first letter is shown instead.'],
-      ['#gl-banner-rm', 'banner', 'Remove the banner?', 'The group header goes back to plain.'],
-    ]) {
-      const btn = $(id, container);
-      if (!btn) continue;
-      btn.onclick = async () => {
-        if (!(await confirmDialog(title, msg, { confirmText: 'Remove', danger: true }))) return;
-        try {
-          await api(`/groups/${ctx.groupId}/${kind}`, { method: 'DELETE' });
-          await after(kind === 'avatar' ? 'Group photo removed' : 'Banner removed');
-        } catch (ex) {
-          toast(ex.message, { error: true });
-        }
-      };
-    }
   }
 
   const set = $('#set-form', container);

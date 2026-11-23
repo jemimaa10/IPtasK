@@ -32,14 +32,6 @@ export const avatarUpload = multer({
     cb(/^image\/(png|jpe?g|webp|gif)$/.test(file.mimetype) ? null : rejected('Avatar must be a PNG, JPG, WEBP or GIF image.'), true),
 });
 
-// Group banners: wide photos, shrunk by the app before uploading (4 MB like proofs).
-export const bannerUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) =>
-    cb(/^image\/(png|jpe?g|webp|gif)$/.test(file.mimetype) ? null : rejected('Banner must be a PNG, JPG, WEBP or GIF image.'), true),
-});
-
 export const proofUpload = multer({
   storage: multer.memoryStorage(),
   // 4 MB: serverless hosts reject request bodies over ~4.5 MB. The app shrinks photos before uploading.

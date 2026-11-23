@@ -590,41 +590,35 @@ textarea.input { min-height: 90px; resize: vertical; }
 .btn-logout { background: var(--red); border-color: var(--red); color: #fff; }
 .btn-logout:hover { background: #e83a5c; border-color: #e83a5c; color: #fff; }
 
-/* ---------- group photo & banner ---------- */
+/* ---------- group photo ---------- */
 img.group-dot { object-fit: cover; background: var(--surface-2); }
-/* With a banner the photo fills the header behind the name and tabs; a dark fade keeps the text readable. */
-.group-header.has-banner {
-  background: linear-gradient(180deg, rgba(8, 10, 14, .25) 0%, rgba(8, 10, 14, .55) 55%, rgba(8, 10, 14, .82) 100%), var(--banner) center / cover no-repeat;
-  backdrop-filter: none; border-bottom-color: transparent;
-}
-.group-header.has-banner .group-header-inner { padding-top: 56px; }
-.group-header.has-banner h1 { color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
-.group-header.has-banner .group-title-row p { color: rgba(255, 255, 255, .82); }
-.group-header.has-banner .tabs a { color: rgba(255, 255, 255, .72); }
-.group-header.has-banner .tabs a:hover,
-.group-header.has-banner .tabs a.active { color: #fff; }
-.group-header.has-banner .group-dot { box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); }
-@media (max-width: 860px) { .group-header.has-banner .group-header-inner { padding-top: 40px; } }
-/* Chat keeps the header short so the messages get the room. */
-main#view:has(.chat) .group-header.has-banner .group-header-inner { padding-top: 18px; }
-
-.group-look { display: flex; flex-direction: column; gap: 14px; }
-.group-look-row { display: flex; align-items: center; gap: 14px; }
-.group-look-row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.group-look-row small { color: var(--text-3); font-size: 13px; }
-.group-look-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.group-look-banner {
-  height: 110px; border-radius: 12px; background: var(--surface-2) center / cover no-repeat;
-  border: 1px dashed var(--border-strong); display: grid; place-items: center; color: var(--text-3); font-size: 13px;
-}
-.group-look-banner[style*="background-image"] { border-style: solid; border-color: var(--border); }
-@media (max-width: 600px) {
-  .group-look-row { flex-wrap: wrap; }
-  .group-look-actions { width: 100%; justify-content: flex-start; }
-}
 
 /* Square crop frame for group photos. */
 .crop-group .crop-mask { border-radius: 22%; }
 .crop-group .crop-big { border-radius: 22%; }
 .crop-group .crop-sample img { border-radius: 8px; }
 .crop-group .crop-sample.small img { border-radius: 6px; }
+
+/* Group header: the leader taps the photo to change it. */
+.group-photo-edit { position: relative; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 12px; flex: none; }
+.group-photo-edit .cam {
+  position: absolute; right: -5px; bottom: -5px; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent); color: #0a0b10; box-shadow: 0 0 0 2px var(--bg);
+}
+.group-photo-edit .cam svg { width: 12px; height: 12px; }
+.group-photo-edit:hover .group-dot { filter: brightness(.9); }
+.group-photo-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* Create group: optional photo. */
+.cg-photo {
+  width: 100%; display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 12px;
+  border: 1px dashed var(--border-strong); border-radius: 14px; background: none; cursor: pointer; text-align: left; font: inherit; color: var(--text);
+}
+.cg-photo:hover { border-color: var(--accent); }
+.cg-photo-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cg-photo-label { color: var(--accent); font-size: 14px; }
+.cg-photo-text small { color: var(--text-3); font-size: 12px; }
+.cg-dot {
+  width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; overflow: hidden;
+  font-weight: 700; font-size: 26px; color: #0a0b10; flex: none;
+}
+.cg-dot img { width: 100%; height: 100%; object-fit: cover; }

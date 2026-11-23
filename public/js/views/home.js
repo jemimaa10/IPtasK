@@ -1,13 +1,18 @@
 import { api, bus } from '../api.js';
 import { store, app } from '../state.js';
-import { $, $$, esc, avatar, groupDot, countdown, fmtDate, statusPill, openModal, toast, busy, reminderSelect } from '../ui.js';
+import { $, $$, esc, avatar, groupDot, colorFor, countdown, fmtDate, statusPill, openModal, toast, busy, reminderSelect } from '../ui.js';
 import { openStory } from './confession.js';
+import { pickGroupPhoto, uploadGroupPhoto } from '../group-look.js';
 
 export function openCreateGroup() {
   const { modal, close } = openModal(`
     <h2>Create a group</h2>
     <p class="sub">You'll be the leader: invite members, split the jobdesks, and set deadlines.</p>
     <form id="cg-form">
+      <button type="button" class="cg-photo" title="Group photo (optional)">
+        <span class="cg-dot"></span>
+        <span class="cg-photo-text"><b class="cg-photo-label">Add group photo</b><small>Optional. Without one, the first letter of the name is shown.</small></span>
+      </button>
       <div class="field"><label>Group name</label><input class="input" name="name" maxlength="60" required placeholder="e.g. PBO Kelompok 3"></div>
       <div class="field"><label>Description <small>(optional)</small></label><textarea class="input" name="description" maxlength="300" placeholder="Course, project, goal…"></textarea></div>
       <div class="field">
@@ -30,6 +35,32 @@ export function openCreateGroup() {
     </form>`);
   const form = modal.querySelector('form');
   form.querySelector('[data-close]').onclick = close;
+
+  // Optional photo, uploaded right after the group is created.
+  let photo = null;
+  let photoUrl = '';
+  const paintPhoto = () => {
+    const dot = form.querySelector('.cg-dot');
+    const name = form.name.value.trim();
+    if (photo) {
+      dot.innerHTML = `<img src="${photoUrl}" alt="">`;
+      dot.style.background = '';
+    } else {
+      dot.textContent = (name[0] || '?').toUpperCase();
+      dot.style.background = colorFor(name + 'new');
+    }
+    form.querySelector('.cg-photo-label').textContent = photo ? 'Change group photo' : 'Add group photo';
+  };
+  form.name.addEventListener('input', paintPhoto);
+  form.querySelector('.cg-photo').onclick = async () => {
+    const blob = await pickGroupPhoto(form.name.value.trim());
+    if (!blob) return;
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photo = blob;
+    photoUrl = URL.createObjectURL(blob);
+    paintPhoto();
+  };
+  paintPhoto();
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     busy(form.querySelector('.btn-primary'), async () => {
@@ -43,6 +74,13 @@ export function openCreateGroup() {
             reminderEveryDays: Number(form.reminder.value),
           },
         });
+        if (photo) {
+          try {
+            await uploadGroupPhoto(group.id, photo);
+          } catch (err) {
+            toast('The group was created, but the photo could not be uploaded.', { body: err.message, error: true });
+          }
+        }
         close();
         await app.refreshGroups();
         location.hash = `#/group/${group.id}/members`;

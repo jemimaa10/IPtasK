@@ -310,7 +310,7 @@ const MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_events_user  ON events (user_id, id);
     CREATE INDEX IF NOT EXISTS idx_events_group ON events (group_id, id);
   `),
-  // 2: optional group photo (like a profile photo) and a banner behind the group header.
+  // 2: optional group photo (like a profile photo). banner_path is unused (the banner idea was dropped).
   () => exec(`
     ALTER TABLE groups ADD COLUMN IF NOT EXISTS avatar_path TEXT;
     ALTER TABLE groups ADD COLUMN IF NOT EXISTS banner_path TEXT;

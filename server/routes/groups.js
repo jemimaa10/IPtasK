@@ -6,7 +6,7 @@ import { aiEnabled, splitJobdesk } from '../gemini.js';
 import { refreshMissionStatus, FINAL_STATUSES, parseReminderDays } from '../missions.js';
 import { groupLeaderboard } from '../stats.js';
 import { reevaluateGroupRedeems } from '../labels.js';
-import { avatarUpload, bannerUpload, saveUploads, removeFile, AVATARS } from '../uploads.js';
+import { avatarUpload, saveUploads, removeFile, AVATARS } from '../uploads.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -50,7 +50,6 @@ function groupView(group, userId) {
     description: group.description,
     // Stored with the user avatars: random names, served by /uploads/avatars/:name.
     avatarUrl: group.avatar_path ? `/uploads/avatars/${group.avatar_path}` : null,
-    bannerUrl: group.banner_path ? `/uploads/avatars/${group.banner_path}` : null,
     verifyGraceHours: group.verify_grace_hours,
     reminderEveryDays: group.reminder_every_days,
     leaderId: group.leader_id,
@@ -126,30 +125,29 @@ router.patch('/groups/:groupId', loadGroup(true), async (req, res) => {
   res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
 });
 
-// Group photo and banner (both optional): the leader sets or removes them.
-for (const [kind, column, upload] of [['avatar', 'avatar_path', avatarUpload], ['banner', 'banner_path', bannerUpload]]) {
-  router.post(`/groups/:groupId/${kind}`, loadGroup(true), upload.single(kind), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'Choose an image first.' });
-    await saveUploads(AVATARS, [req.file]);
-    await run(`UPDATE groups SET ${column} = ? WHERE id = ?`, req.file.filename, req.group.id);
-    removeFile(AVATARS, req.group[column]);
-    await emitToGroup(req.group.id, 'group:changed');
-    res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
-  });
-  router.delete(`/groups/:groupId/${kind}`, loadGroup(true), async (req, res) => {
-    await run(`UPDATE groups SET ${column} = NULL WHERE id = ?`, req.group.id);
-    removeFile(AVATARS, req.group[column]);
-    await emitToGroup(req.group.id, 'group:changed');
-    res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
-  });
-}
+// Group photo (optional): the leader sets or removes it.
+router.post('/groups/:groupId/avatar', loadGroup(true), avatarUpload.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose an image first.' });
+  await saveUploads(AVATARS, [req.file]);
+  await run('UPDATE groups SET avatar_path = ? WHERE id = ?', req.file.filename, req.group.id);
+  removeFile(AVATARS, req.group.avatar_path);
+  await emitToGroup(req.group.id, 'group:changed');
+  res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
+});
+
+router.delete('/groups/:groupId/avatar', loadGroup(true), async (req, res) => {
+  await run('UPDATE groups SET avatar_path = NULL WHERE id = ?', req.group.id);
+  removeFile(AVATARS, req.group.avatar_path);
+  await emitToGroup(req.group.id, 'group:changed');
+  res.json({ group: groupView(await one('SELECT * FROM groups WHERE id = ?', req.group.id), req.user.id) });
+});
 
 router.delete('/groups/:groupId', loadGroup(true), async (req, res) => {
   // Sent to each member directly: once the group is gone, nobody is a member any more.
   const members = await all('SELECT user_id FROM group_members WHERE group_id = ?', req.group.id);
   await run('DELETE FROM groups WHERE id = ?', req.group.id);
   removeFile(AVATARS, req.group.avatar_path);
-  removeFile(AVATARS, req.group.banner_path);
+  removeFile(AVATARS, req.group.banner_path); // left over from the dropped banner feature
   for (const m of members) await emitToUser(m.user_id, 'group:deleted', { groupId: req.group.id });
   res.json({ ok: true });
 });

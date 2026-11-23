@@ -1,9 +1,13 @@
 import { api, bus, joinGroupRoom } from '../api.js';
 import { $, $$, esc, avatar, groupDot, toast } from '../ui.js';
+import { app } from '../state.js';
+
+const CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
 import { renderFeed } from './group-feed.js';
 import { renderChat } from './group-chat.js';
 import { renderMissions } from './group-missions.js';
 import { renderMembers } from './group-members.js';
+import { editGroupPhoto } from '../group-look.js';
 
 const TABS = {
   feed: { label: 'Proof feed', render: renderFeed },
@@ -40,13 +44,11 @@ export function renderGroup(view, route) {
   function renderHeader() {
     const g = ctx.group;
     const head = $('#group-head', view);
-    // Optional banner photo behind the name and tabs (like a Google Forms header).
-    const header = head.parentElement;
-    header.classList.toggle('has-banner', Boolean(g.bannerUrl));
-    header.style.setProperty('--banner', g.bannerUrl ? `url("${g.bannerUrl}")` : 'none');
     head.innerHTML = `
       <div class="group-title-row">
-        ${groupDot(g, 42)}
+        ${ctx.isLeader
+          ? `<button type="button" class="group-photo-edit" data-edit="avatar" title="${g.avatarUrl ? 'Change' : 'Add'} group photo">${groupDot(g, 42)}<span class="cam">${CAMERA}</span></button>`
+          : groupDot(g, 42)}
         <div style="min-width:0">
           <h1>${esc(g.name)}</h1>
           <p>${ctx.members.length} member${ctx.members.length > 1 ? 's' : ''}${g.description ? ` · ${esc(g.description)}` : ''}</p>
@@ -56,6 +58,15 @@ export function renderGroup(view, route) {
       <nav class="tabs">${Object.entries(TABS)
         .map(([key, t]) => `<a href="#/group/${groupId}/${key}" data-tab="${key}" class="${key === tab ? 'active' : ''}">${t.label}</a>`)
         .join('')}</nav>`;
+    // Leader: tap the photo to add, change or remove it.
+    const photo = $('[data-edit]', head);
+    if (photo) {
+      photo.onclick = async () => {
+        if (!(await editGroupPhoto(ctx.group))) return;
+        await ctx.reload();
+        app.refreshGroups();
+      };
+    }
   }
 
   function mountTab() {

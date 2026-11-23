@@ -161,8 +161,18 @@ main#view { min-width: 0; }
 .msg.me .time { text-align: right; }
 .msg .avatar-slot { width: 30px; flex-shrink: 0; }
 .chat-day { align-self: center; font-size: 11px; color: var(--text-3); padding: 14px 0 6px; text-transform: uppercase; letter-spacing: .08em; }
-.composer { display: flex; gap: 10px; padding: 14px 28px 20px; border-top: 1px solid var(--border); background: var(--bg); }
-.composer textarea { flex: 1; resize: none; max-height: 140px; }
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 28px 14px; border-top: 1px solid var(--border); background: var(--bg); }
+/* One line to start with; grows with the text (group-chat.js) up to 140px, then scrolls. */
+.composer textarea.input { flex: 1; resize: none; min-height: 0; height: 42px; max-height: 140px; padding: 10px 16px; line-height: 20px; border-radius: 21px; overflow-y: auto; }
+.composer-send {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--accent); color: var(--accent-ink);
+  transition: filter .15s, transform .1s;
+}
+.composer-send svg { width: 20px; height: 20px; }
+.composer-send:hover { filter: brightness(1.06); }
+.composer-send:active { transform: scale(.94); }
+.composer-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -362,26 +372,26 @@ textarea.input { min-height: 90px; resize: vertical; }
   .topbar button { background: none; border: 0; color: var(--text); cursor: pointer; padding: 4px; }
   .topbar .badge { margin-left: 0; }
   .page, .group-body { padding: 20px 16px 80px; }
-  .group-header { top: 57px; }
+  .group-header { top: 62px; }
   .group-header-inner { padding: 14px 16px 0; }
   /* Chat fills exactly the space between the top bar and the bottom nav, whatever the header height. */
   main#view:has(.chat) {
     display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0;
-    height: calc(100vh - 57px - var(--bottom-nav-h));
-    height: calc(100dvh - 57px - var(--bottom-nav-h));
+    height: calc(100vh - 62px - var(--bottom-nav-h));
+    height: calc(100dvh - 62px - var(--bottom-nav-h));
   }
   main#view:has(.chat) > #group-tab { flex: 1; min-height: 0; }
   main#view:has(.chat) .group-header { position: static; }
   .chat { height: 100%; }
   .chat-scroll { padding: 16px; }
-  .composer { padding: 12px 16px 16px; }
+  .composer { padding: 8px 12px 10px; }
 }
 /* Tablets in portrait keep the bottom nav, but have room for desktop-style rows and wider padding. */
 @media (min-width: 601px) and (max-width: 860px) {
   .page, .group-body { padding: 28px 28px 88px; }
   .group-header-inner { padding: 18px 28px 0; }
   .chat-scroll { padding: 20px 28px; }
-  .composer { padding: 12px 28px 16px; }
+  .composer { padding: 10px 28px 14px; }
   /* Keep the five tabs close together instead of spread across the whole width. */
   nav.bottom-nav { padding-inline: max(6px, calc((100% - 560px) / 2)); }
 }
@@ -661,3 +671,7 @@ img.group-dot { object-fit: cover; background: var(--surface-2); }
   background: transparent; color: var(--red); border: 1px solid rgba(255, 77, 109, .35);
 }
 .me-card-logout:hover { background: rgba(255, 77, 109, .1); }
+
+/* Phones: the bottom navigation hides while the keyboard is open (keyboard.js). */
+:root.kb-open { --bottom-nav-h: 0px; }
+:root.kb-open .bottom-nav { display: none !important; }

@@ -9,6 +9,7 @@ import { renderProfile } from './views/profile.js';
 import { renderUser } from './views/user.js';
 import { openCreateGroup } from './views/home.js';
 import { toggleMeCard } from './me-card.js';
+import { watchKeyboard } from './keyboard.js';
 
 const root = $('#root');
 let cleanup = null;
@@ -278,4 +279,5 @@ bus.on('group:deleted', ({ groupId }) => {
   }
 });
 
+watchKeyboard();
 start();

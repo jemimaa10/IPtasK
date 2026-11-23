@@ -17,7 +17,7 @@ export function renderChat(container, ctx) {
       <div class="chat-scroll" id="chat-scroll"><div class="loading"><span class="spinner"></span></div></div>
       <form class="composer" id="chat-form">
         <textarea class="input" rows="1" placeholder="Message ${esc(ctx.group.name)}…" maxlength="2000"></textarea>
-        <button class="btn btn-primary">Send</button>
+        <button class="composer-send" aria-label="Send" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 5l7 7-7 7"/></svg></button>
       </form>
     </div>`;
   const scroller = $('#chat-scroll', container);
@@ -111,7 +111,7 @@ export function renderChat(container, ctx) {
   });
   input.addEventListener('input', () => {
     input.style.height = 'auto';
-    input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+    input.style.height = `${Math.min(input.scrollHeight + 2, 140)}px`; // grows with the text, like WhatsApp
   });
 
   const off = bus.on('message', (m) => {

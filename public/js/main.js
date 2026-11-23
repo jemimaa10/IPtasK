@@ -8,6 +8,7 @@ import { renderNotifications } from './views/notifications.js';
 import { renderProfile } from './views/profile.js';
 import { renderUser } from './views/user.js';
 import { openCreateGroup } from './views/home.js';
+import { toggleMeCard } from './me-card.js';
 
 const root = $('#root');
 let cleanup = null;
@@ -62,10 +63,13 @@ app.renderSidebar = () => {
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === route.name));
   $$('.bottom-nav [data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === route.name));
   $('#nav-me').innerHTML = `
-    ${avatar(store.me, 36)}
-    <div class="who"><b>${esc(store.me.displayName)}</b><small>@${esc(store.me.username)}</small></div>
+    <button type="button" class="me-btn" id="me-card-btn" aria-haspopup="dialog" aria-expanded="false" title="Your profile">
+      ${avatar(store.me, 36)}
+      <div class="who"><b>${esc(store.me.displayName)}</b><small>@${esc(store.me.username)}</small></div>
+    </button>
     <button class="btn btn-ghost btn-sm" id="logout" title="Log out">${ICONS.logout}</button>`;
   $('#logout').onclick = app.logout;
+  $('#me-card-btn').onclick = (e) => toggleMeCard(e.currentTarget);
 };
 
 /** Mobile: the sidebar's group list, as a bottom sheet. */

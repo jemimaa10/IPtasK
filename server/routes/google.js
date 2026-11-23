@@ -67,10 +67,10 @@ async function googleProfile(req, code) {
   return claims;
 }
 
-/** A free username from the email (or name): letters, numbers, _ and . only, 3–20 characters. */
+/** A free username from the email (or name): letters, numbers, _ and . only, 3–30 characters. */
 async function freeUsername(claims) {
   let base = String(claims.email || claims.name || 'user').split('@')[0]
-    .replace(/[^a-zA-Z0-9_.]/g, '').slice(0, 16);
+    .replace(/[^a-zA-Z0-9_.]/g, '').slice(0, 26); // room for up to 4 digits when taken
   if (base.length < 3) base = `user${base}`;
   const taken = async (name) => Boolean(await one('SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)', name));
   if (!(await taken(base))) return base;

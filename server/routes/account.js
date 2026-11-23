@@ -10,7 +10,7 @@ import { attemptLimiter, tooManyAttempts } from '../security.js';
 import { userStats } from '../stats.js';
 
 const router = Router();
-const USERNAME_RE = /^[a-zA-Z0-9_.]{3,20}$/;
+const USERNAME_RE = /^[a-zA-Z0-9_.]{3,30}$/;
 
 // Failed logins: 5 per username+IP and 30 per IP every 15 minutes. Sign-ups: 10 per IP per hour.
 const loginByAccount = attemptLimiter({ max: 5, windowMs: 15 * 60_000 });
@@ -31,7 +31,7 @@ router.post('/auth/register', async (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
   if (!USERNAME_RE.test(username)) {
-    return res.status(400).json({ error: 'Username must be 3–20 characters: letters, numbers, _ or .' });
+    return res.status(400).json({ error: 'Username must be 3–30 characters: letters, numbers, _ or .' });
   }
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   if (await one('SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)', username)) {

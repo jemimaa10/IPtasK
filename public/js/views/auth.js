@@ -15,8 +15,8 @@ export function renderAuth(root, mode) {
       <form id="auth-form" class="card" novalidate>
         <div class="field">
           <label for="username">Username</label>
-          <input class="input" id="username" name="username" autocomplete="username" required minlength="3" maxlength="20" placeholder="e.g. jeremy_05">
-          ${isLogin ? '' : '<small>3–20 characters: letters, numbers, _ or .</small>'}
+          <input class="input" id="username" name="username" autocomplete="username" required minlength="3" maxlength="30" placeholder="e.g. jeremy_05">
+          ${isLogin ? '' : '<small>3–30 characters: letters, numbers, _ or .</small>'}
         </div>
         <div class="field">
           <label for="password">Password</label>

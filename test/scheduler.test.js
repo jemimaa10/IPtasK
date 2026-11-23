@@ -55,7 +55,7 @@ beforeEach(async () => {
 });
 
 test('schema is in place: version, columns, case-insensitive usernames', async () => {
-  assert.equal(await schemaVersion(), 1);
+  assert.equal(await schemaVersion(), 2);
   const cols = async (t) =>
     (await all('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', t)).map((c) => c.column_name);
   assert.ok((await cols('events')).includes('payload'));

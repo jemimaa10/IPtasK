@@ -29,6 +29,14 @@ export function initials(name = '?') {
   return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase();
 }
 
+/** A group's photo, or its coloured first letter when none is set. */
+export function groupDot(group, size = 28) {
+  const box = `width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.29)}px`;
+  if (group?.avatarUrl) return `<img class="group-dot" src="${esc(group.avatarUrl)}" alt="" style="${box}">`;
+  const name = group?.name || '?';
+  return `<span class="group-dot" style="${box};font-size:${Math.round(size * 0.44)}px;background:${colorFor(name + group?.id)}">${esc(name[0].toUpperCase())}</span>`;
+}
+
 /** Uploaded photo, or the default initials avatar when none is set. */
 export function avatar(user, size = 40) {
   if (!user) return `<span class="avatar" style="width:${size}px;height:${size}px"></span>`;

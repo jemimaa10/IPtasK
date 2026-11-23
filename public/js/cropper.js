@@ -19,7 +19,7 @@ function loadImage(file) {
   });
 }
 
-export async function cropAvatar(file, { name = '' } = {}) {
+export async function cropAvatar(file, { name = '', group = false } = {}) {
   const { img, url } = await loadImage(file);
   const W = img.naturalWidth;
   const H = img.naturalHeight;
@@ -54,8 +54,8 @@ export async function cropAvatar(file, { name = '' } = {}) {
 
   const { modal, close } = openModal(`
     <div class="crop-step" data-step="crop">
-      <h2>Adjust your photo</h2>
-      <p class="sub">Drag to move, use the slider (or pinch / scroll) to zoom. Only the part inside the circle is used.</p>
+      <h2>${group ? 'Adjust the group photo' : 'Adjust your photo'}</h2>
+      <p class="sub">Drag to move, use the slider (or pinch / scroll) to zoom. Only the part inside the ${group ? 'frame' : 'circle'} is used.</p>
       <div class="crop-stage" tabindex="0" aria-label="Photo crop area. Arrow keys move, plus and minus zoom.">
         <canvas></canvas>
         <div class="crop-mask" aria-hidden="true"></div>
@@ -74,11 +74,11 @@ export async function cropAvatar(file, { name = '' } = {}) {
     </div>
     <div class="crop-step" data-step="check" hidden>
       <h2>Use this photo?</h2>
-      <p class="sub">This is how your group will see you. Nothing changes until you confirm.</p>
+      <p class="sub">${group ? 'This is how every member will see the group.' : 'This is how your group will see you.'} Nothing changes until you confirm.</p>
       <div class="crop-check">
         <img class="crop-big" alt="New profile photo">
         <div class="crop-samples">
-          <div class="crop-sample"><img alt=""><div><b>${esc(name)}</b><span>Uploaded proof · just now</span></div></div>
+          <div class="crop-sample"><img alt=""><div><b>${esc(name)}</b><span>${group ? 'Your groups' : 'Uploaded proof · just now'}</span></div></div>
           <div class="crop-sample small"><img alt=""><span>${esc(name)}</span></div>
         </div>
       </div>
@@ -86,7 +86,7 @@ export async function cropAvatar(file, { name = '' } = {}) {
         <button class="btn btn-ghost" type="button" data-back>Back to edit</button>
         <button class="btn btn-primary" type="button" data-ok>Use this photo</button>
       </div>
-    </div>`, { className: 'crop-modal' });
+    </div>`, { className: `crop-modal${group ? ' crop-group' : ''}` });
 
   const canvas = modal.querySelector('canvas');
   const stage = modal.querySelector('.crop-stage');

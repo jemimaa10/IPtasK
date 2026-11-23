@@ -1,5 +1,5 @@
 import { api, bus, joinGroupRoom } from '../api.js';
-import { $, $$, esc, avatar, colorFor, toast } from '../ui.js';
+import { $, $$, esc, avatar, groupDot, toast } from '../ui.js';
 import { renderFeed } from './group-feed.js';
 import { renderChat } from './group-chat.js';
 import { renderMissions } from './group-missions.js';
@@ -40,9 +40,13 @@ export function renderGroup(view, route) {
   function renderHeader() {
     const g = ctx.group;
     const head = $('#group-head', view);
+    // Optional banner photo behind the name and tabs (like a Google Forms header).
+    const header = head.parentElement;
+    header.classList.toggle('has-banner', Boolean(g.bannerUrl));
+    header.style.setProperty('--banner', g.bannerUrl ? `url("${g.bannerUrl}")` : 'none');
     head.innerHTML = `
       <div class="group-title-row">
-        <span class="group-dot" style="width:42px;height:42px;font-size:18px;background:${colorFor(g.name + g.id)}">${esc(g.name[0].toUpperCase())}</span>
+        ${groupDot(g, 42)}
         <div style="min-width:0">
           <h1>${esc(g.name)}</h1>
           <p>${ctx.members.length} member${ctx.members.length > 1 ? 's' : ''}${g.description ? ` · ${esc(g.description)}` : ''}</p>

@@ -1,6 +1,6 @@
 import { api, bus, connectLive, disconnectLive } from './api.js';
 import { store, app } from './state.js';
-import { $, $$, esc, avatar, colorFor, toast, openModal, confirmDialog, ICONS } from './ui.js';
+import { $, $$, esc, avatar, groupDot, toast, openModal, confirmDialog, ICONS } from './ui.js';
 import { renderAuth } from './views/auth.js';
 import { renderHome } from './views/home.js';
 import { renderGroup } from './views/group.js';
@@ -51,7 +51,7 @@ app.renderSidebar = () => {
         .map(
           (g) => `
       <a class="group-link ${route.name === 'group' && route.id === g.id ? 'active' : ''}" href="#/group/${g.id}/feed">
-        <span class="group-dot" style="background:${colorFor(g.name + g.id)}">${esc(g.name[0].toUpperCase())}</span>
+        ${groupDot(g)}
         <span class="name">${esc(g.name)}</span>
         ${g.myOpenMissions ? `<span class="badge" style="background:var(--amber);color:#111">${g.myOpenMissions}</span>` : ''}
       </a>`
@@ -76,7 +76,7 @@ function openGroupSheet() {
     <div class="sheet-list">${store.groups.length
       ? store.groups.map((g) => `
         <a class="group-link ${current.name === 'group' && current.id === g.id ? 'active' : ''}" href="#/group/${g.id}/feed">
-          <span class="group-dot" style="background:${colorFor(g.name + g.id)}">${esc(g.name[0].toUpperCase())}</span>
+          ${groupDot(g)}
           <span class="name">${esc(g.name)}</span>
           ${g.myOpenMissions ? `<span class="badge" style="background:var(--amber);color:#111">${g.myOpenMissions}</span>` : ''}
         </a>`).join('')

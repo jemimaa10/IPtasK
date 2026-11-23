@@ -1,6 +1,6 @@
 import { api, bus } from '../api.js';
 import { store, app } from '../state.js';
-import { $, $$, esc, avatar, colorFor, countdown, fmtDate, statusPill, openModal, toast, busy, reminderSelect } from '../ui.js';
+import { $, $$, esc, avatar, groupDot, countdown, fmtDate, statusPill, openModal, toast, busy, reminderSelect } from '../ui.js';
 import { openStory } from './confession.js';
 
 export function openCreateGroup() {
@@ -58,7 +58,7 @@ function missionRow(m, { review = false } = {}) {
   const cd = countdown(m.deadline);
   return `
     <a class="mission" href="#/group/${m.groupId}/${review ? 'feed' : 'missions'}" style="text-decoration:none">
-      ${review ? avatar(m.assignee, 36) : `<span class="group-dot" style="background:${colorFor(m.groupName + m.groupId)}">${esc((m.groupName || '?')[0].toUpperCase())}</span>`}
+      ${review ? avatar(m.assignee, 36) : groupDot(store.groups.find((g) => g.id === m.groupId) || { id: m.groupId, name: m.groupName })}
       <div class="mission-main">
         <p class="mission-title">${esc(m.title)}</p>
         <div class="mission-meta">
@@ -187,7 +187,7 @@ export function renderHome(view) {
           .map((g) => `
             <a class="card group-card" href="#/group/${g.id}/feed">
               <div style="display:flex;gap:12px;align-items:center">
-                <span class="group-dot" style="width:40px;height:40px;font-size:17px;background:${colorFor(g.name + g.id)}">${esc(g.name[0].toUpperCase())}</span>
+                ${groupDot(g, 40)}
                 <div style="min-width:0"><h3>${esc(g.name)}</h3><p>${esc(g.lastMessage || g.description || 'No messages yet')}</p></div>
               </div>
               <div class="meta">
